@@ -1,0 +1,1 @@
+"""MAPS domain package."""

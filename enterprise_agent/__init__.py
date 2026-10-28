@@ -1,3 +1,3 @@
-"""Deterministic, auditable planning and scheduling agents."""
+"""MAPS manufacturing coordination framework."""
 
 __version__ = "0.1.0"

@@ -22,6 +22,10 @@ python -m unittest discover -s tests -v
 | `material_conflict` | 缺料方案升级到 Orchestrate 仲裁，保持原计划 |
 | `no_change` | 保留原计划，不调用 LLM，不增加 MES 版本 |
 
+## 代码入口
+
+从 [Orchestrate](enterprise_agent/agents/orchestrate.py) 开始阅读。完整目录和旧路径迁移见 [代码结构](docs/code-layout.md)。
+
 ## Agent 如何分工
 
 - **Orchestrate** 读取基线和事件，组织处理流程，在冲突时仲裁并记录原因。
@@ -73,12 +77,15 @@ python -m enterprise_agent train-drl --episodes 400 --seed 42
 - [公开发布说明](docs/public-release.md)
 
 ```text
-enterprise_agent/maps/   三层框架、企业接口协议、局部约束与模拟 MES
-enterprise_agent/        排程核心、LLM 协议、持久化与独立实验
-examples/                合成场景与显式 MES 基线
-tests/                   约束、事务、协议、框架与训练验证
-docs/                    面向外部读者的技术说明
-artifacts/               本机生成的运行输出
+enterprise_agent/agents/          Orchestrate、Planning、Scheduling、Warehouse
+enterprise_agent/capabilities/    共享算法与业务校验
+enterprise_agent/domain/          数据契约与接口协议
+enterprise_agent/infrastructure/  模型通信、模拟 MES 与审计记录
+enterprise_agent/application/     主框架组装
+enterprise_agent/experiments/     早期编排、DQN 与基线实验
+examples/                        合成输入
+tests/                           行为与架构边界测试
+docs/                            设计与迁移说明
 ```
 
 ## 实现边界

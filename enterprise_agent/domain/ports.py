@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .contracts import (DecisionContext, GateDecision, MESBaseline, MESPatch,
-                        Proposal, ScheduleCandidate, WorkPackage)
+from enterprise_agent.domain.contracts import DecisionContext, GateDecision, MESBaseline, MESPatch, Proposal, ScheduleCandidate, WorkPackage
 
 
 class MESReader(Protocol):

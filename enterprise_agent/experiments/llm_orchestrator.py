@@ -5,11 +5,15 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import asdict
 
-from .llm import LLMClient, LLMError, run_tool_loop
-from .models import Event, Plan, Snapshot
-from .planning import CollectionAgent, OrchestratorAgent, PredictionAgent, ResponseAgent
-from .scheduler import measure, score, validate_plan
-from .warehouse import MessageBus, WarehouseAgent
+from enterprise_agent.infrastructure.llm import LLMClient, LLMError
+from enterprise_agent.experiments.llm_tools import run_tool_loop
+from enterprise_agent.domain.models import Event, Plan, Snapshot
+from enterprise_agent.capabilities.collection import EventCollector
+from enterprise_agent.experiments.rule_orchestrator import RuleExperimentOrchestrator, ResponseAgent
+from enterprise_agent.capabilities.prediction import KnownRiskPredictor
+from enterprise_agent.capabilities.scheduling import measure, score, validate_plan
+from enterprise_agent.infrastructure.trace import TraceLog
+from enterprise_agent.capabilities.materials import MaterialAllocator
 
 
 class PlanningTools:
@@ -18,7 +22,7 @@ class PlanningTools:
         self.snapshot, self.baseline, self.event = snapshot, baseline, event
         self.optimizer = optimizer
         self.drl_checkpoint = drl_checkpoint
-        self.bus = MessageBus(event.id)
+        self.bus = TraceLog(event.id)
         self.bus.send("collection", "orchestrator", "state.updated", {
             "event_id": event.id, "kind": event.kind, "now": snapshot.now})
         self.risks = None
@@ -35,7 +39,7 @@ class PlanningTools:
             return {"ok": True, "snapshot": self.snapshot.to_dict(),
                     "baseline": self.baseline.to_dict()}
         if name == "forecast_risks":
-            self.risks = PredictionAgent.predict(self.snapshot, self.baseline)
+            self.risks = KnownRiskPredictor.predict(self.snapshot, self.baseline)
             self.bus.send("prediction", "orchestrator", "risk.forecast", {"risks": self.risks})
             return {"ok": True, "risks": self.risks}
         if name == "assess_impact":
@@ -47,8 +51,8 @@ class PlanningTools:
             order = next((o for o in self.snapshot.orders if o.id == args["order_id"]), None)
             if order is None:
                 raise ValueError("unknown order")
-            quote_bus = MessageBus(self.event.id)
-            ready, allocations, reason = WarehouseAgent(self.snapshot, quote_bus).reserve(order)
+            quote_bus = TraceLog(self.event.id)
+            ready, allocations, reason = MaterialAllocator(self.snapshot, quote_bus).reserve(order)
             return {"ok": True, "order_id": order.id, "ready": ready, "allocations": allocations,
                     "shortage_reason": reason,
                     "scope": "isolated quote; shared competition checked by build_schedule"}
@@ -73,7 +77,7 @@ class PlanningTools:
         elif strategy == "drl":
             if not self.drl_checkpoint:
                 return {"ok": False, "error": "No trained DRL checkpoint configured; use search or a rule."}
-            from .drl import dispatch_with_checkpoint
+            from enterprise_agent.experiments.dqn import dispatch_with_checkpoint
             try:
                 plan = dispatch_with_checkpoint(self.snapshot, self.drl_checkpoint, self.baseline)
             except (ImportError, RuntimeError, ValueError, OSError):
@@ -116,7 +120,7 @@ class PlanningTools:
                 raise ValueError("cannot keep an invalid baseline")
             plan, messages = deepcopy(self.baseline), []
             plan.metrics = self.before
-            warehouse = WarehouseAgent(self.snapshot, self.bus)
+            warehouse = MaterialAllocator(self.snapshot, self.bus)
             starts = {a.order_id: a.start for a in plan.assignments
                       if any(o.id == a.order_id and o.operations[0].id == a.operation_id
                              for o in self.snapshot.orders)}
@@ -142,14 +146,14 @@ class PlanningTools:
                 "metrics": plan.metrics, "blocked": plan.blocked, "validation_errors": []}
 
 
-class LLMOrchestratorAgent(OrchestratorAgent):
+class LLMExperimentOrchestrator(RuleExperimentOrchestrator):
     def __init__(self, client: LLMClient, drl_checkpoint: str | None = None):
         super().__init__()
         self.client = client
         self.drl_checkpoint = drl_checkpoint
 
     def process(self, snapshot: Snapshot, baseline: Plan, event: Event):
-        updated = CollectionAgent.apply(snapshot, event)
+        updated = EventCollector.apply(snapshot, event)
         session = PlanningTools(updated, baseline, event, self.optimizer, self.drl_checkpoint)
         context = {"mode": "single_epoch_offline_simulation", "event": asdict(event),
                    "snapshot": updated.to_dict(), "baseline": baseline.to_dict(),

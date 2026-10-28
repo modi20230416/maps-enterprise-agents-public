@@ -1,8 +1,8 @@
 """Independent acceptance checks for every proposal and MES patch."""
 
-from ..models import Plan
-from ..scheduler import measure, score, validate_plan
-from .contracts import DecisionContext, GateDecision, Priority, Proposal
+from enterprise_agent.domain.models import Plan
+from enterprise_agent.capabilities.scheduling import measure, score, validate_plan
+from enterprise_agent.domain.contracts import DecisionContext, GateDecision, Priority, Proposal
 
 
 def safety_status(context: DecisionContext) -> tuple[str, str] | None:

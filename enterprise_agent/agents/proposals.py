@@ -6,9 +6,9 @@ from dataclasses import asdict
 import json
 from time import monotonic
 
-from ..llm import LLMClient, LLMError, tool
-from .contracts import DecisionContext, GateDecision, Proposal
-from .validation import validate_proposal
+from enterprise_agent.infrastructure.llm import LLMClient, LLMError, tool
+from enterprise_agent.domain.contracts import DecisionContext, GateDecision, Proposal
+from enterprise_agent.capabilities.validation import validate_proposal
 
 
 class RuleProposals:

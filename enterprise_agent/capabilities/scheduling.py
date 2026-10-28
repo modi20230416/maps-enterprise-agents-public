@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from itertools import permutations
 
-from .models import Assignment, Plan, Snapshot
-from .warehouse import MessageBus, WarehouseAgent
+from enterprise_agent.domain.models import Assignment, Plan, Snapshot
+from enterprise_agent.infrastructure.trace import TraceLog
+from enterprise_agent.capabilities.materials import MaterialAllocator
 
 
 def earliest_slot(ready: int, duration: int, occupied: list[tuple[int, int]]) -> int:
@@ -106,7 +107,7 @@ def validate_plan(snapshot: Snapshot, plan: Plan) -> list[str]:
     return sorted(set(errors))
 
 
-class OptimizationAgent:
+class BoundedSearchOptimizer:
     """Search is exact only over the selected dispatch sequences, not all schedules."""
 
     def __init__(self, candidate_limit: int = 120):
@@ -144,8 +145,8 @@ class OptimizationAgent:
 
     def construct(self, snapshot: Snapshot, orders: tuple, strategy: str,
                   correlation_id: str) -> tuple[Plan, list[dict]]:
-        bus = MessageBus(correlation_id)
-        warehouse = WarehouseAgent(snapshot, bus)
+        bus = TraceLog(correlation_id)
+        warehouse = MaterialAllocator(snapshot, bus)
         occupied = {m.id: list(m.unavailable) for m in snapshot.machines}
         plan = Plan(strategy=strategy)
         for order in orders:

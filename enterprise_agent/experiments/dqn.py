@@ -14,9 +14,9 @@ from copy import deepcopy
 from pathlib import Path
 from statistics import mean
 
-from .models import Plan, Snapshot
-from .rl_env import ACTION_NAMES, ENV_VERSION, DispatchEnv, training_snapshot
-from .scheduler import OptimizationAgent, measure, score, validate_plan
+from enterprise_agent.domain.models import Plan, Snapshot
+from enterprise_agent.experiments.dispatch_env import ACTION_NAMES, ENV_VERSION, DispatchEnv, training_snapshot
+from enterprise_agent.capabilities.scheduling import BoundedSearchOptimizer, measure, score, validate_plan
 
 
 class NeuralDispatchPolicy:
@@ -79,7 +79,7 @@ def dispatch_with_checkpoint(snapshot: Snapshot, path: str, baseline: Plan | Non
 def evaluate(policy: NeuralDispatchPolicy, seed: int, cases: int = 24) -> dict:
     records = []
     rng = random.Random(seed)
-    optimizer = OptimizationAgent()
+    optimizer = BoundedSearchOptimizer()
     for index in range(cases):
         snapshot = training_snapshot(seed + index, policy.max_orders)
         outcomes = {}

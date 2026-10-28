@@ -6,16 +6,16 @@ import random
 from statistics import mean
 from time import perf_counter
 
-from .models import Snapshot
-from .scenarios import base_snapshot, order
-from .scheduler import OptimizationAgent, measure, score, validate_plan
+from enterprise_agent.domain.models import Snapshot
+from enterprise_agent.experiments.scenarios import base_snapshot, order
+from enterprise_agent.capabilities.scheduling import BoundedSearchOptimizer, measure, score, validate_plan
 
 
 def benchmark(cases: int = 30, seed: int = 20261014) -> dict:
     if not 1 <= cases <= 1000:
         raise ValueError("cases must be between 1 and 1000")
     rng = random.Random(seed)
-    optimizer = OptimizationAgent()
+    optimizer = BoundedSearchOptimizer()
     records = []
     for case in range(cases):
         data = base_snapshot()

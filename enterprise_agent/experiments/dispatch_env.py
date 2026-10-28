@@ -9,9 +9,10 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 
-from .models import Plan, Snapshot
-from .scheduler import OptimizationAgent, measure, validate_plan
-from .warehouse import MessageBus, WarehouseAgent
+from enterprise_agent.domain.models import Plan, Snapshot
+from enterprise_agent.capabilities.scheduling import BoundedSearchOptimizer, measure, validate_plan
+from enterprise_agent.infrastructure.trace import TraceLog
+from enterprise_agent.capabilities.materials import MaterialAllocator
 
 ACTION_NAMES = ("priority_edd", "edd", "shortest_processing", "weighted_slack")
 ENV_VERSION = "dispatch-rule-v1"
@@ -23,7 +24,7 @@ class DispatchEnv:
             raise ValueError("snapshot exceeds bounded RL order capacity")
         self.snapshot, self.max_orders, self.baseline = snapshot, max_orders, baseline
         self.orders = tuple(sorted(snapshot.orders, key=lambda o: o.id))
-        self.optimizer = OptimizationAgent()
+        self.optimizer = BoundedSearchOptimizer()
         self.observation_size = 10 + 8 * max_orders
         self.time_scale = max(1, max([snapshot.now,
             *(o.release for o in self.orders), *(r.eta + snapshot.preparation_minutes for r in snapshot.receipts),
@@ -42,7 +43,7 @@ class DispatchEnv:
         self.cost = 0.0
         self.material_ready = {}
         for order in self.orders:
-            ready, _, _ = WarehouseAgent(snapshot, MessageBus("rl-quote")).reserve(order)
+            ready, _, _ = MaterialAllocator(snapshot, TraceLog("rl-quote")).reserve(order)
             self.material_ready[order.id] = ready
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
@@ -117,7 +118,7 @@ class DispatchEnv:
 
 
 def training_snapshot(seed: int, max_orders: int = 8) -> Snapshot:
-    from .scenarios import base_snapshot, order
+    from enterprise_agent.experiments.scenarios import base_snapshot, order
     rng = random.Random(seed)
     data = base_snapshot()
     count = rng.randint(3, min(6, max_orders))

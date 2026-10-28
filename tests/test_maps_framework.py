@@ -1,7 +1,7 @@
 """MAPS acceptance tests: authoritative MES, scope, WIP, approval and LLM guards."""
 
 from copy import deepcopy
-from dataclasses import asdict, replace
+from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -9,17 +9,18 @@ import sys
 import tempfile
 import unittest
 
-from enterprise_agent.llm import LLMClient, LLMConfig, LLMError
-from enterprise_agent.maps.adapters import InMemoryMES, parse_baseline
-from enterprise_agent.maps.contracts import MapsEvent, MESPatch, Priority, Proposal
-from enterprise_agent.maps.demo import run_demo
-from enterprise_agent.maps.orchestrate import OrchestrateAgent
-from enterprise_agent.maps.planning import DataCollect, PlanningAgent, QuickRespond
-from enterprise_agent.maps.ports import StaleMESVersion
-from enterprise_agent.maps.proposals import LLMProposals
-from enterprise_agent.maps.scheduling import ReplayQualification, SchedulingAgent
-from enterprise_agent.maps.validation import validate_candidate
-from enterprise_agent.scheduler import validate_plan
+from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig, LLMError
+from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
+from enterprise_agent.domain.contracts import MapsEvent, MESPatch, Priority
+from enterprise_agent.application.demo import run_demo
+from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.agents.planning import DataCollect, PlanningAgent, QuickRespond
+from enterprise_agent.domain.ports import StaleMESVersion
+from enterprise_agent.agents.proposals import LLMProposals
+from enterprise_agent.domain.policy import ReplayQualification
+from enterprise_agent.agents.scheduling import SchedulingAgent
+from enterprise_agent.capabilities.validation import validate_candidate
+from enterprise_agent.capabilities.scheduling import validate_plan
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "examples" / "maps_framework.json"

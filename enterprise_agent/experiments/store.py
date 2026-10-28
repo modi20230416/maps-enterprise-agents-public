@@ -8,8 +8,8 @@ import sqlite3
 from dataclasses import asdict
 from pathlib import Path
 
-from .models import Event, Plan, Snapshot
-from .planning import OrchestratorAgent
+from enterprise_agent.domain.models import Event, Plan, Snapshot
+from enterprise_agent.experiments.rule_orchestrator import RuleExperimentOrchestrator
 
 
 def encode(value: object) -> str:
@@ -53,7 +53,7 @@ class StateStore:
     def __exit__(self, *args) -> None:
         self.close()
 
-    def initialize(self, session_id: str, snapshot: Snapshot, engine: OrchestratorAgent) -> Plan:
+    def initialize(self, session_id: str, snapshot: Snapshot, engine: RuleExperimentOrchestrator) -> Plan:
         initial = encode(snapshot.to_dict())
         self.connection.execute("BEGIN IMMEDIATE")
         try:
@@ -87,7 +87,7 @@ class StateStore:
             raise ValueError("unknown session")
         return Snapshot.parse(json.loads(row[0])), Plan.parse(json.loads(row[1])), row[2]
 
-    def process(self, session_id: str, event: Event, engine: OrchestratorAgent) -> dict:
+    def process(self, session_id: str, event: Event, engine: RuleExperimentOrchestrator) -> dict:
         fingerprint = hashlib.sha256(encode(asdict(event)).encode("utf-8")).hexdigest()
         def recorded():
             row = self.connection.execute(

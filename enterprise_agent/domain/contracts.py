@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
-from ..models import Event, Plan, Snapshot, identifier, integer
+from enterprise_agent.domain.models import Event, Plan, Snapshot, identifier, integer
 
 
 class Priority(str, Enum):

@@ -5,14 +5,16 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from enterprise_agent.cli import main, run_scenario
-from enterprise_agent.experiments import benchmark
-from enterprise_agent.models import Assignment, Event, Plan, Snapshot
-from enterprise_agent.planning import OrchestratorAgent
-from enterprise_agent.scenarios import base_snapshot, order, scenarios
-from enterprise_agent.scheduler import OptimizationAgent, earliest_slot, validate_plan
-from enterprise_agent.store import StateStore
-from enterprise_agent.warehouse import MessageBus, WarehouseAgent
+from enterprise_agent.cli import main
+from enterprise_agent.experiments.runner import run_scenario
+from enterprise_agent.experiments.benchmark import benchmark
+from enterprise_agent.domain.models import Assignment, Event, Plan, Snapshot
+from enterprise_agent.experiments.rule_orchestrator import RuleExperimentOrchestrator
+from enterprise_agent.experiments.scenarios import base_snapshot, order, scenarios
+from enterprise_agent.capabilities.scheduling import BoundedSearchOptimizer, earliest_slot, validate_plan
+from enterprise_agent.experiments.store import StateStore
+from enterprise_agent.infrastructure.trace import TraceLog
+from enterprise_agent.capabilities.materials import MaterialAllocator
 
 
 class ConstraintsTests(unittest.TestCase):
@@ -48,7 +50,7 @@ class ConstraintsTests(unittest.TestCase):
         data["stock"] = {"steel": 1}
         data["receipts"] = [{"id": "R", "material": "other", "quantity": 1, "eta": 50}]
         s = Snapshot.parse(data)
-        warehouse = WarehouseAgent(s, MessageBus("test"))
+        warehouse = MaterialAllocator(s, TraceLog("test"))
         bad = order("BAD", 10, 100, 10)
         bad["materials"] = {"steel": 1, "missing": 1}
         self.assertIsNone(warehouse.reserve(Snapshot.parse({**data, "orders": [bad]}).orders[0])[0])
@@ -73,7 +75,7 @@ class ConstraintsTests(unittest.TestCase):
 
     def test_randomized_feasibility_and_determinism(self):
         rng = random.Random(20261014)
-        optimizer = OptimizationAgent()
+        optimizer = BoundedSearchOptimizer()
         for index in range(35):
             data = base_snapshot()
             count = rng.randint(0, 5)
@@ -144,7 +146,7 @@ class ClosedLoopTests(unittest.TestCase):
 
     def test_unrelated_downtime_keeps_plan(self):
         s = Snapshot.parse(base_snapshot())
-        engine = OrchestratorAgent()
+        engine = RuleExperimentOrchestrator()
         baseline = engine.initialize(s)
         e = Event.parse({"id": "unrelated", "at": 0, "kind": "machine.unavailable",
                          "payload": {"machine_id": "CUT-1", "start": 1000, "end": 1100}})
@@ -156,7 +158,7 @@ class ClosedLoopTests(unittest.TestCase):
         data = base_snapshot()
         data["stock"]["steel"] = 0
         s = Snapshot.parse(data)
-        engine = OrchestratorAgent()
+        engine = RuleExperimentOrchestrator()
         baseline = engine.initialize(s)
         self.assertEqual(len(baseline.blocked), 2)
         e = Event("restore", "inventory.corrected", 0, {"material": "steel", "quantity": 2})
@@ -170,7 +172,7 @@ class PersistenceTests(unittest.TestCase):
         case = scenarios()["rush_order"]
         s = Snapshot.parse(case["snapshot"])
         e = Event.parse(case["events"][0])
-        engine = OrchestratorAgent()
+        engine = RuleExperimentOrchestrator()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             with StateStore(path) as store:
@@ -187,7 +189,7 @@ class PersistenceTests(unittest.TestCase):
 
     def test_invalid_event_rolls_back_state_and_audit(self):
         with StateStore(":memory:") as store:
-            engine = OrchestratorAgent()
+            engine = RuleExperimentOrchestrator()
             s = Snapshot.parse(base_snapshot())
             store.initialize("s", s, engine)
             before = store.read("s")
@@ -203,7 +205,7 @@ class PersistenceTests(unittest.TestCase):
 
     def test_session_identity_rejects_different_initial_snapshot(self):
         with StateStore(":memory:") as store:
-            engine = OrchestratorAgent()
+            engine = RuleExperimentOrchestrator()
             store.initialize("s", Snapshot.parse(base_snapshot()), engine)
             changed = base_snapshot()
             changed["stock"]["steel"] = 99

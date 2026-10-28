@@ -8,11 +8,11 @@ import hashlib
 import json
 from threading import Lock
 
-from ..models import Plan, Snapshot
-from ..scheduler import validate_plan
-from .contracts import MESBaseline, MESPatch, Priority, WorkOrder
-from .ports import StaleMESVersion
-from .validation import safety_status, validate_candidate
+from enterprise_agent.domain.models import Plan, Snapshot
+from enterprise_agent.capabilities.scheduling import validate_plan
+from enterprise_agent.domain.contracts import MESBaseline, MESPatch, Priority, WorkOrder
+from enterprise_agent.domain.ports import StaleMESVersion
+from enterprise_agent.capabilities.validation import safety_status, validate_candidate
 
 
 def fingerprint(value: object) -> str:
@@ -62,7 +62,7 @@ class InMemoryMES:
                 raise ValueError("patch baseline does not match authoritative MES state")
             # Rebuild observed context from the authoritative baseline/event,
             # rather than trusting caller-supplied frozen status or snapshot.
-            from .planning import DataCollect, QuickRespond
+            from enterprise_agent.agents.planning import DataCollect, QuickRespond
             authoritative = DataCollect().collect(self._baseline, patch.context.event)
             if asdict(authoritative) != asdict(patch.context):
                 raise ValueError("patch context differs from validated source event")
@@ -75,8 +75,8 @@ class InMemoryMES:
             errors = validate_candidate(authoritative, patch.plan, patch.scope)
             if errors:
                 raise ValueError("patch validation failed: " + "; ".join(errors))
-            from .scheduling import WarehouseCoordinator
-            reservations, _, conflicts = WarehouseCoordinator().confirm(authoritative, patch.plan)
+            from enterprise_agent.agents.warehouse import WarehouseAgent
+            reservations, _, conflicts = WarehouseAgent().confirm(authoritative, patch.plan)
             if conflicts or reservations != patch.plan.reservations:
                 raise ValueError("patch material confirmations do not match independent warehouse check")
             self._baseline = MESBaseline(self._baseline.version + 1,

@@ -6,11 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_agent.drl import NeuralDispatchPolicy, dispatch_with_checkpoint, train_dqn
-from enterprise_agent.models import Snapshot
-from enterprise_agent.rl_env import ACTION_NAMES, ENV_VERSION, DispatchEnv, training_snapshot
-from enterprise_agent.scenarios import base_snapshot
-from enterprise_agent.scheduler import validate_plan
+from enterprise_agent.experiments.dqn import NeuralDispatchPolicy, dispatch_with_checkpoint, train_dqn
+from enterprise_agent.domain.models import Snapshot
+from enterprise_agent.experiments.dispatch_env import ACTION_NAMES, ENV_VERSION, DispatchEnv, training_snapshot
+from enterprise_agent.experiments.scenarios import base_snapshot
+from enterprise_agent.capabilities.scheduling import validate_plan
 
 
 class RLEnvironmentTests(unittest.TestCase):

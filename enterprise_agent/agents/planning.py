@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import replace
 from time import monotonic
 
-from ..planning import CollectionAgent, PredictionAgent
-from ..scheduler import measure, validate_plan
-from .contracts import (DecisionContext, GateDecision, MapsEvent, MESBaseline,
-                        PRIORITY_WEIGHTS, Priority, WorkOrder, WorkPackage)
-from .ports import ConstraintSolver, ForecastProvider
+from enterprise_agent.capabilities.collection import EventCollector
+from enterprise_agent.capabilities.prediction import KnownRiskPredictor
+from enterprise_agent.capabilities.scheduling import measure, validate_plan
+from enterprise_agent.domain.contracts import DecisionContext, GateDecision, MapsEvent, MESBaseline, PRIORITY_WEIGHTS, Priority, WorkOrder, WorkPackage
+from enterprise_agent.domain.ports import ConstraintSolver, ForecastProvider
 
 
 class DataCollect:
@@ -23,7 +23,7 @@ class DataCollect:
             payload["order"] = order
             normalized = replace(normalized, payload=payload)
             catalog.append(WorkOrder(payload["mo_id"], order["id"], event.priority))
-        snapshot = CollectionAgent.apply(baseline.snapshot, normalized)
+        snapshot = EventCollector.apply(baseline.snapshot, normalized)
         return DecisionContext(baseline, snapshot, tuple(catalog), event)
 
 
@@ -56,7 +56,7 @@ class QuickRespond:
                 material = next(r.material for r in snapshot.receipts if r.id == event.payload["receipt_id"])
             scope = {o.id for o in orders.values() if material in o.materials}
         else:
-            risks = PredictionAgent.predict(snapshot, baseline)
+            risks = KnownRiskPredictor.predict(snapshot, baseline)
             scope = {r["order_id"] for r in risks if "order_id" in r}
             scope.update(baseline.blocked)
             if reasons and not scope:
@@ -81,13 +81,13 @@ class KnownWindowPrediction:
 
     def forecast(self, context: DecisionContext) -> list[dict]:
         return [{**risk, "source": "known_calendar_and_eta", "confidence_interval": None}
-                for risk in PredictionAgent.predict(context.snapshot, context.baseline.plan)]
+                for risk in KnownRiskPredictor.predict(context.snapshot, context.baseline.plan)]
 
 
 class PlanningAgent:
     def __init__(self, prediction: ForecastProvider | None = None,
                  optimizer: ConstraintSolver | None = None):
-        from .scheduling import LocalSearchSolver
+        from enterprise_agent.capabilities.local_search import LocalSearchSolver
         self.prediction = prediction or KnownWindowPrediction()
         self.optimizer = optimizer or LocalSearchSolver()
 

@@ -6,9 +6,9 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
-from .adapters import InMemoryMES, parse_baseline
-from .contracts import MapsEvent
-from .orchestrate import OrchestrateAgent
+from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
+from enterprise_agent.domain.contracts import MapsEvent
+from enterprise_agent.agents.orchestrate import OrchestrateAgent
 
 
 DEMO_CASES = ("high_order", "emergency_review", "material_conflict", "no_change")

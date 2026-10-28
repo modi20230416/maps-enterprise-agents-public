@@ -7,16 +7,16 @@ from dataclasses import asdict
 from threading import Lock
 from time import monotonic
 
-from ..llm import LLMError
-from ..scheduler import measure
-from ..warehouse import MessageBus
-from .adapters import fingerprint
-from .contracts import (DecisionResult, MapsEvent, MESPatch, RESPONSE_TARGET_SECONDS)
-from .planning import DataCollect, PlanningAgent, QuickRespond
-from .ports import DiagnosisProvider, MESReader, MESWriter, ProposalProvider, StaleMESVersion
-from .proposals import RuleProposals
-from .scheduling import SchedulingAgent
-from .validation import safety_status, validate_candidate, validate_proposal
+from enterprise_agent.infrastructure.llm import LLMError
+from enterprise_agent.capabilities.scheduling import measure
+from enterprise_agent.infrastructure.trace import TraceLog
+from enterprise_agent.infrastructure.mes import fingerprint
+from enterprise_agent.domain.contracts import DecisionResult, MapsEvent, MESPatch, RESPONSE_TARGET_SECONDS
+from enterprise_agent.agents.planning import DataCollect, PlanningAgent, QuickRespond
+from enterprise_agent.domain.ports import DiagnosisProvider, MESReader, MESWriter, ProposalProvider, StaleMESVersion
+from enterprise_agent.agents.proposals import RuleProposals
+from enterprise_agent.agents.scheduling import SchedulingAgent
+from enterprise_agent.capabilities.validation import safety_status, validate_candidate, validate_proposal
 
 
 class OrchestrateAgent:
@@ -52,7 +52,7 @@ class OrchestrateAgent:
         started = monotonic()
         baseline = self.reader.read_baseline()
         context = DataCollect().collect(baseline, event)
-        bus = MessageBus(event.event.id)
+        bus = TraceLog(event.event.id)
         bus.send("data_collect", "orchestrate", "monitor.observed", {
             "object": event.monitored_object, "priority": event.priority.value,
             "mes_version": baseline.version, "source": "MES baseline + normalized event"})

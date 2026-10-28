@@ -1,34 +1,16 @@
-"""Warehouse agent: quantity-aware offers and tentative material reservations."""
-
 from __future__ import annotations
+from enterprise_agent.domain.models import Order, Snapshot
 
-from copy import deepcopy
+from enterprise_agent.infrastructure.trace import TraceLog
 
-from .models import Order, Snapshot
-
-
-class MessageBus:
-    """Synchronous local protocol; envelopes can later move to a message broker."""
-
-    def __init__(self, correlation_id: str):
-        self.correlation_id = correlation_id
-        self.messages: list[dict] = []
-
-    def send(self, sender: str, receiver: str, kind: str, payload: dict) -> None:
-        self.messages.append({"sequence": len(self.messages) + 1,
-                              "correlation_id": self.correlation_id,
-                              "sender": sender, "receiver": receiver,
-                              "kind": kind, "payload": deepcopy(payload)})
-
-
-class WarehouseAgent:
+class MaterialAllocator:
     """Reservations belong to one candidate, never to global inventory.
 
     All order materials are issued as one kit before its first operation. Supply
     lots include preparation/transport lead time. A rejected kit consumes nothing.
     """
 
-    def __init__(self, snapshot: Snapshot, bus: MessageBus):
+    def __init__(self, snapshot: Snapshot, bus: TraceLog):
         self.snapshot = snapshot
         self.bus = bus
         self.lots: dict[str, list[dict]] = {}

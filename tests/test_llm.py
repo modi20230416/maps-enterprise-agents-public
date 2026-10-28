@@ -6,15 +6,16 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from enterprise_agent.cli import run_scenario
-from enterprise_agent.llm import LLMClient, LLMConfig, LLMError, check_arguments
-from enterprise_agent.llm_planning import LLMOrchestratorAgent
-from enterprise_agent.models import Event, Snapshot
-from enterprise_agent.planning import OrchestratorAgent
-from enterprise_agent.scenarios import scenarios
-from enterprise_agent.scheduler import validate_plan
-from enterprise_agent.store import StateStore
-from enterprise_agent.warehouse import MessageBus
+from enterprise_agent.experiments.runner import run_scenario
+from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig, LLMError
+from enterprise_agent.experiments.llm_tools import check_arguments
+from enterprise_agent.experiments.llm_orchestrator import LLMExperimentOrchestrator
+from enterprise_agent.domain.models import Event, Snapshot
+from enterprise_agent.experiments.rule_orchestrator import RuleExperimentOrchestrator
+from enterprise_agent.experiments.scenarios import scenarios
+from enterprise_agent.capabilities.scheduling import validate_plan
+from enterprise_agent.experiments.store import StateStore
+from enterprise_agent.infrastructure.trace import TraceLog
 
 
 class ScriptedTransport:
@@ -51,7 +52,7 @@ class LLMIntegrationTests(unittest.TestCase):
     def engine(self, calls, api="responses", **limits):
         transport = ScriptedTransport(calls, api)
         cfg = LLMConfig(model="test-model", api_key="test-secret-not-a-real-key", api=api, **limits)
-        return LLMOrchestratorAgent(LLMClient(cfg, transport)), transport
+        return LLMExperimentOrchestrator(LLMClient(cfg, transport)), transport
 
     def test_responses_tool_loop_drives_real_scheduling_tools(self):
         engine, transport = self.engine(calls_for_replan())
@@ -93,7 +94,7 @@ class LLMIntegrationTests(unittest.TestCase):
         self.assertEqual(decision["candidate_count"], 0)
 
     def test_llm_can_call_drl_candidate_tool_with_a_checkpoint(self):
-        from enterprise_agent.rl_env import ACTION_NAMES, ENV_VERSION
+        from enterprise_agent.experiments.dispatch_env import ACTION_NAMES, ENV_VERSION
         layers = [74, 32, 32, 4]
         model = {"format": "maps-dqn-v1", "environment_version": ENV_VERSION,
                  "actions": list(ACTION_NAMES), "max_orders": 8, "layers": layers,
@@ -169,7 +170,7 @@ class LLMIntegrationTests(unittest.TestCase):
     def test_config_does_not_expose_key_and_requires_explicit_model(self):
         cfg = LLMConfig(model="test", api_key="secret-value")
         self.assertNotIn("secret-value", repr(cfg))
-        with patch.dict(os.environ, {}, clear=True), patch("enterprise_agent.llm.load_llm_profile", return_value={}):
+        with patch.dict(os.environ, {}, clear=True), patch("enterprise_agent.infrastructure.llm.load_llm_profile", return_value={}):
             with self.assertRaisesRegex(ValueError, "MODEL"):
                 LLMConfig.from_env()
         with self.assertRaises(ValueError):
@@ -216,7 +217,7 @@ class LLMIntegrationTests(unittest.TestCase):
         self.assertIn("max_tokens", payload)
         self.assertNotIn("max_completion_tokens", payload)
         self.assertNotIn("parallel_tool_calls", payload)
-        from enterprise_agent.llm import TOOLS
+        from enterprise_agent.experiments.llm_tools import TOOLS
         self.assertTrue(all(t["strict"] for t in TOOLS))
         transport = ScriptedTransport([("forecast_risks", {})], "chat_completions")
         LLMClient(cfg, transport).complete("test", client.history({}), TOOLS, 20)
@@ -237,7 +238,7 @@ class LLMIntegrationTests(unittest.TestCase):
         self.assertNotIn("private-transient-reasoning-marker", json.dumps(report))
 
     def test_profile_rejects_credentials_and_invalid_flag_types(self):
-        from enterprise_agent.llm import load_llm_profile
+        from enterprise_agent.infrastructure.llm import load_llm_profile
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "config.json"
             target.write_text(json.dumps({"api_key": "do-not-store-here"}), encoding="utf-8")
@@ -248,7 +249,7 @@ class LLMIntegrationTests(unittest.TestCase):
                 load_llm_profile(str(target))
 
     def test_audit_payload_is_a_snapshot_not_a_mutable_reference(self):
-        bus = MessageBus("e")
+        bus = TraceLog("e")
         payload = {"items": [{"qty": 1}]}
         bus.send("a", "b", "x", payload)
         payload["items"][0]["qty"] = 99
@@ -257,12 +258,12 @@ class LLMIntegrationTests(unittest.TestCase):
     def test_remote_planning_does_not_hold_write_lock_and_stale_commit_rejected(self):
         case = scenarios()["no_change"]
         initial = Snapshot.parse(case["snapshot"])
-        rules = OrchestratorAgent()
+        rules = RuleExperimentOrchestrator()
         with tempfile.TemporaryDirectory() as directory:
             db = Path(directory) / "state.sqlite3"
             with StateStore(db) as first, StateStore(db) as second:
                 first.initialize("s", initial, rules)
-                class InterleavedEngine(OrchestratorAgent):
+                class InterleavedEngine(RuleExperimentOrchestrator):
                     def process(self, snapshot, baseline, event):
                         second.process("s", Event("other", "planning.tick", 0, {}), rules)
                         return super().process(snapshot, baseline, event)

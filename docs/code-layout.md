@@ -52,19 +52,7 @@ Agent 使用共享能力完成计算。底层的 `EventCollector`、`KnownRiskPr
 主框架的 agents/capabilities/domain/infrastructure/application 不依赖 experiments。
 实验使用同一套共享能力，计算逻辑只维护一份。MES 演示网关会反向调用 Agent 的采集、门卫和仓库确认来复核补丁，当前没有把整个项目宣称为严格单向的分层架构。
 
-## 迁移说明
+## 运行入口
 
-| 原入口 | 现入口 |
-|---|---|
-| `maps/orchestrate.py` | `agents/orchestrate.py` |
-| `maps/planning.py` | `agents/planning.py` |
-| `maps/scheduling.py` | `agents/scheduling.py`，局部搜索、仓库与回放资格已提取 |
-| 外层 `planning.py` | `experiments/rule_orchestrator.py`，共享采集与预测已提取 |
-| `llm_planning.py` | `experiments/llm_orchestrator.py` |
-| 外层 `scheduler.py` / `warehouse.py` | `capabilities/scheduling.py` / `materials.py` |
-| 外层 `llm.py` | `infrastructure/llm.py`，实验工具循环放入 `experiments/llm_tools.py` |
-| `drl.py` / `rl_env.py` | `experiments/dqn.py` / `dispatch_env.py` |
-
-内部 Python 导入路径已统一迁移，没有保留同名转发文件。外部脚本若直接导入旧模块，需要相应修改。
-命令行名称保持兼容：主框架使用 `framework-demo`；`demo`、`run`、`benchmark`、`rl-demo`、`train-drl` 属于独立实验。
-本次调整组织结构与命名，不改变排程算法、模型接口配置或业务验收标准。
+主框架使用 `python -m enterprise_agent framework-demo`。
+`demo`、`run`、`benchmark`、`rl-demo`、`train-drl` 用于独立实验。

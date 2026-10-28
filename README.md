@@ -24,7 +24,7 @@ python -m unittest discover -s tests -v
 
 ## 代码入口
 
-从 [Orchestrate](enterprise_agent/agents/orchestrate.py) 开始阅读。完整目录和旧路径迁移见 [代码结构](docs/code-layout.md)。
+从 [Orchestrate](enterprise_agent/agents/orchestrate.py) 开始阅读。完整目录和模块职责见 [代码结构](docs/code-layout.md)。
 
 ## Agent 如何分工
 
@@ -85,7 +85,7 @@ enterprise_agent/application/     主框架组装
 enterprise_agent/experiments/     早期编排、DQN 与基线实验
 examples/                        合成输入
 tests/                           行为与架构边界测试
-docs/                            设计与迁移说明
+docs/                            设计与运行说明
 ```
 
 ## 实现边界

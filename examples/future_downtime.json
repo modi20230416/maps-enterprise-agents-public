@@ -1,0 +1,89 @@
+{
+  "description": "t=0 获知 t=60 的设备不可用，提前调整",
+  "snapshot": {
+    "now": 0,
+    "preparation_minutes": 10,
+    "lookahead_minutes": 180,
+    "machines": [
+      {
+        "id": "CUT-1"
+      },
+      {
+        "id": "CUT-2"
+      },
+      {
+        "id": "ASSEMBLY-1"
+      }
+    ],
+    "stock": {
+      "steel": 3
+    },
+    "receipts": [],
+    "orders": [
+      {
+        "id": "NORMAL-1",
+        "priority": 2,
+        "due": 110,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 45
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      },
+      {
+        "id": "NORMAL-2",
+        "priority": 1,
+        "due": 150,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 40
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      }
+    ]
+  },
+  "events": [
+    {
+      "id": "machine-001",
+      "kind": "machine.unavailable",
+      "at": 0,
+      "payload": {
+        "machine_id": "ASSEMBLY-1",
+        "start": 60,
+        "end": 130
+      }
+    }
+  ]
+}

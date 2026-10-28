@@ -1,0 +1,43 @@
+{
+  "description": "合成 MES 基线：高优先级插单，保护在制品与范围外工单，局部重排后模拟写回",
+  "mes": {
+    "version": 1,
+    "snapshot": {
+      "now": 0,
+      "preparation_minutes": 0,
+      "lookahead_minutes": 120,
+      "machines": [{"id": "M1"}, {"id": "M2"}],
+      "stock": {"steel": 3},
+      "receipts": [],
+      "orders": [
+        {"id": "WO-RUN", "priority": 10, "due": 30, "release": 0,
+         "materials": {"steel": 1}, "operations": [{"id": "OP-RUN", "machines": ["M1"], "duration": 20}]},
+        {"id": "WO-NORMAL", "priority": 3, "due": 100, "release": 0,
+         "materials": {"steel": 1}, "operations": [{"id": "OP-NORMAL", "machines": ["M1"], "duration": 30}]},
+        {"id": "WO-OTHER", "priority": 1, "due": 120, "release": 0,
+         "materials": {}, "operations": [{"id": "OP-OTHER", "machines": ["M2"], "duration": 10}]}
+      ]
+    },
+    "work_orders": [
+      {"mo_id": "MO-100", "wo_id": "WO-RUN", "priority": "high", "status": "running", "interruptible": false},
+      {"mo_id": "MO-100", "wo_id": "WO-NORMAL", "priority": "medium", "status": "planned"},
+      {"mo_id": "MO-200", "wo_id": "WO-OTHER", "priority": "low", "status": "planned"}
+    ],
+    "plan": {
+      "assignments": [
+        {"order_id": "WO-RUN", "operation_id": "OP-RUN", "machine_id": "M1", "start": 0, "end": 20},
+        {"order_id": "WO-NORMAL", "operation_id": "OP-NORMAL", "machine_id": "M1", "start": 20, "end": 50},
+        {"order_id": "WO-OTHER", "operation_id": "OP-OTHER", "machine_id": "M2", "start": 80, "end": 90}
+      ],
+      "blocked": {}, "reservations": [], "strategy": "imported_mes_baseline"
+    }
+  },
+  "event": {
+    "id": "high-order-1", "kind": "order.created", "at": 0, "priority": "high",
+    "payload": {
+      "mo_id": "MO-300",
+      "order": {"id": "WO-HIGH", "priority": 10, "due": 40, "release": 0,
+                "materials": {"steel": 1}, "operations": [{"id": "OP-HIGH", "machines": ["M1"], "duration": 15}]}
+    }
+  }
+}

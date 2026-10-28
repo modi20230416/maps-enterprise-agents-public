@@ -1,0 +1,9 @@
+{
+  "provider": "example",
+  "base_url": "https://llm.example.invalid/v1",
+  "api": "chat_completions",
+  "model": "YOUR_MODEL_ID",
+  "chat_token_parameter": "max_tokens",
+  "strict_tools": false,
+  "send_parallel_tool_calls": false
+}

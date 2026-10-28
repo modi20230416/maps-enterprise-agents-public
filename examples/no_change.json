@@ -1,0 +1,85 @@
+{
+  "description": "周期检查没有有效变化，保持排程",
+  "snapshot": {
+    "now": 0,
+    "preparation_minutes": 10,
+    "lookahead_minutes": 180,
+    "machines": [
+      {
+        "id": "CUT-1"
+      },
+      {
+        "id": "CUT-2"
+      },
+      {
+        "id": "ASSEMBLY-1"
+      }
+    ],
+    "stock": {
+      "steel": 3
+    },
+    "receipts": [],
+    "orders": [
+      {
+        "id": "NORMAL-1",
+        "priority": 2,
+        "due": 110,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 45
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      },
+      {
+        "id": "NORMAL-2",
+        "priority": 1,
+        "due": 150,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 40
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      }
+    ]
+  },
+  "events": [
+    {
+      "id": "tick-001",
+      "kind": "planning.tick",
+      "at": 0,
+      "payload": {}
+    }
+  ]
+}

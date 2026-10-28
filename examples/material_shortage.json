@@ -1,0 +1,88 @@
+{
+  "description": "库存盘点下降，明确阻塞订单而不透支物料",
+  "snapshot": {
+    "now": 0,
+    "preparation_minutes": 10,
+    "lookahead_minutes": 180,
+    "machines": [
+      {
+        "id": "CUT-1"
+      },
+      {
+        "id": "CUT-2"
+      },
+      {
+        "id": "ASSEMBLY-1"
+      }
+    ],
+    "stock": {
+      "steel": 3
+    },
+    "receipts": [],
+    "orders": [
+      {
+        "id": "NORMAL-1",
+        "priority": 2,
+        "due": 110,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 45
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      },
+      {
+        "id": "NORMAL-2",
+        "priority": 1,
+        "due": 150,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 40
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      }
+    ]
+  },
+  "events": [
+    {
+      "id": "stock-001",
+      "kind": "inventory.corrected",
+      "at": 0,
+      "payload": {
+        "material": "steel",
+        "quantity": 1
+      }
+    }
+  ]
+}

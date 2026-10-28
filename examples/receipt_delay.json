@@ -1,0 +1,95 @@
+{
+  "description": "到货从 t=40 延迟到 t=120，重新协商齐套时间",
+  "snapshot": {
+    "now": 0,
+    "preparation_minutes": 10,
+    "lookahead_minutes": 180,
+    "machines": [
+      {
+        "id": "CUT-1"
+      },
+      {
+        "id": "CUT-2"
+      },
+      {
+        "id": "ASSEMBLY-1"
+      }
+    ],
+    "stock": {
+      "steel": 1
+    },
+    "receipts": [
+      {
+        "id": "PO-1",
+        "material": "steel",
+        "quantity": 1,
+        "eta": 40
+      }
+    ],
+    "orders": [
+      {
+        "id": "NORMAL-1",
+        "priority": 2,
+        "due": 110,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 45
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      },
+      {
+        "id": "NORMAL-2",
+        "priority": 1,
+        "due": 150,
+        "release": 0,
+        "materials": {
+          "steel": 1
+        },
+        "operations": [
+          {
+            "id": "cut",
+            "machines": [
+              "CUT-1",
+              "CUT-2"
+            ],
+            "duration": 40
+          },
+          {
+            "id": "assemble",
+            "machines": [
+              "ASSEMBLY-1"
+            ],
+            "duration": 20
+          }
+        ]
+      }
+    ]
+  },
+  "events": [
+    {
+      "id": "receipt-001",
+      "kind": "receipt.delayed",
+      "at": 0,
+      "payload": {
+        "receipt_id": "PO-1",
+        "eta": 120
+      }
+    }
+  ]
+}

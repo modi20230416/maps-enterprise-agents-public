@@ -22,7 +22,8 @@ def fingerprint(value: object) -> str:
 
 def parse_baseline(data: dict) -> MESBaseline:
     catalog = tuple(WorkOrder(w["mo_id"], w["wo_id"], Priority(w["priority"]),
-                             w.get("status", "planned"), w.get("interruptible", False))
+                             w.get("status", "planned"), w.get("interruptible", False),
+                             w.get("production_ready", False))
                     for w in data["work_orders"])
     return MESBaseline(data["version"], Snapshot.parse(data["snapshot"]),
                        Plan.parse(data["plan"]), catalog)
@@ -35,13 +36,15 @@ class InMemoryMES:
     neither this state nor the orchestration trace survives process restart.
     """
 
-    def __init__(self, baseline: MESBaseline):
+    def __init__(self, baseline: MESBaseline, *, reviews=None, allow_simulated_reviews=False):
         errors = validate_plan(baseline.snapshot, baseline.plan)
         if errors:
             raise ValueError(f"invalid imported MES baseline: {errors}")
         self._baseline = deepcopy(baseline)
         self._lock = Lock()
         self._applied: dict[str, tuple[str, int]] = {}
+        self.reviews = reviews
+        self.allow_simulated_reviews = allow_simulated_reviews
 
     def read_baseline(self) -> MESBaseline:
         with self._lock:
@@ -79,6 +82,14 @@ class InMemoryMES:
             reservations, _, conflicts = WarehouseAgent().confirm(authoritative, patch.plan)
             if conflicts or reservations != patch.plan.reservations:
                 raise ValueError("patch material confirmations do not match independent warehouse check")
+            from enterprise_agent.infrastructure.review import decision_binding
+            from enterprise_agent.capabilities.admission import admission_errors
+            if admission_errors(authoritative):
+                raise ValueError("work has not met factory admission requirements")
+            if not self.reviews or not self.reviews.verify(
+                    patch.review_ids, decision_binding(authoritative, patch.plan),
+                    allow_simulated=self.allow_simulated_reviews):
+                raise ValueError("all four modules require matching human review before writeback")
             self._baseline = MESBaseline(self._baseline.version + 1,
                                          authoritative.snapshot, patch.plan, authoritative.work_orders)
             self._applied[patch.patch_id] = signature, self._baseline.version

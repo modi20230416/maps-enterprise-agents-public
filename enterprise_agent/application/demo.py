@@ -9,6 +9,7 @@ from pathlib import Path
 from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
 from enterprise_agent.domain.contracts import MapsEvent
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.infrastructure.review import ReviewBoard
 
 
 DEMO_CASES = ("high_order", "emergency_review", "material_conflict", "no_change")
@@ -27,10 +28,12 @@ def run_demo(path: str, scenario: str = "high_order", proposer=None) -> dict:
                  "priority": "low", "payload": {}}
     elif scenario != "high_order":
         raise ValueError("unknown framework demo case")
-    mes = InMemoryMES(parse_baseline(data["mes"]))
+    reviews = ReviewBoard()
+    mes = InMemoryMES(parse_baseline(data["mes"]), reviews=reviews)
     engine = OrchestrateAgent(mes, mes, proposer=proposer)
     result = engine.process(MapsEvent.parse(event))
-    return {"mode": "framework_in_memory_mes", "scenario": scenario,
+    return {"mode": "v14_framework_in_memory_mes", "scenario": scenario,
             "real_mes_connected": False, "marl_implemented": False,
             "cp_milp_implemented": False, "decision": result.to_dict(),
+            "review_mode": "pending_explicit_human_review",
             "final_mes_plan": mes.read_baseline().plan.to_dict()}

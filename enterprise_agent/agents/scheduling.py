@@ -13,8 +13,17 @@ class SchedulingAgent:
         self.solver = solver or LocalSearchSolver()
         self.warehouse = WarehouseAgent()
         self.policy, self.qualification = policy, qualification
+        self._prepared_resources = None
         if policy and (not qualification or not qualification.eligible(policy.policy_id)):
             raise ValueError("MARL requires matching, non-degrading replay evidence before activation")
+
+    def prepare(self, context):
+        from enterprise_agent.infrastructure.mes import fingerprint
+        self._resource_key = fingerprint(context.snapshot.to_dict())
+        self._prepared_resources = {m.id: m.unavailable for m in context.snapshot.machines}
+        self.warehouse.prepare(context)
+        return {"resource_count": len(self._prepared_resources),
+                "warehouse_order_count": len(self.warehouse._prepared_orders)}
 
     def schedule(self, context: DecisionContext, package: WorkPackage,
                  planning_candidate: ScheduleCandidate | None = None) -> ScheduleCandidate:
@@ -35,6 +44,17 @@ class SchedulingAgent:
                 result.messages.append({"sender": "scheduling", "receiver": "orchestrate",
                                         "kind": "policy.fallback", "payload": {"reason": "policy unavailable"}})
         if not result.conflicts:
+            from enterprise_agent.infrastructure.mes import fingerprint
+            hit = (self._prepared_resources is not None
+                   and self._resource_key == fingerprint(context.snapshot.to_dict()))
+            if not hit:
+                self.prepare(context)
+            for a in result.plan.assignments:
+                if any(a.start < end and a.end > start
+                       for start, end in self._prepared_resources.get(a.machine_id, ())):
+                    result.conflicts.append(f"prepared resource calendar conflict: {a.machine_id}")
+            result.messages.append({"sender": "scheduling", "receiver": "orchestrate",
+                                    "kind": "resources.consumed", "payload": {"cache_hit": hit}})
             allocations, messages, conflicts = self.warehouse.confirm(context, result.plan)
             result.plan.reservations = allocations
             result.messages.extend(messages)

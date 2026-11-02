@@ -1,4 +1,4 @@
-"""MAPS entrypoint: monitor, organize, arbitrate conflicts and validate writeback."""
+"""Coordinate ready production, prepare downstream context, and review changes."""
 
 from __future__ import annotations
 
@@ -17,6 +17,9 @@ from enterprise_agent.domain.ports import DiagnosisProvider, MESReader, MESWrite
 from enterprise_agent.agents.proposals import RuleProposals
 from enterprise_agent.agents.scheduling import SchedulingAgent
 from enterprise_agent.capabilities.validation import safety_status, validate_candidate, validate_proposal
+from enterprise_agent.capabilities.admission import admission_errors
+from enterprise_agent.agents.prediction import OperationsPrediction
+from enterprise_agent.infrastructure.review import ReviewBoard, REVIEW_MODULES, decision_binding
 
 
 class OrchestrateAgent:
@@ -24,12 +27,14 @@ class OrchestrateAgent:
                  proposer: ProposalProvider | None = None,
                  planning: PlanningAgent | None = None,
                  scheduling: SchedulingAgent | None = None,
-                 diagnosis: DiagnosisProvider | None = None):
+                 diagnosis: DiagnosisProvider | None = None, prediction=None, reviews=None):
         self.reader, self.writer = reader, writer
         self.proposer = proposer or RuleProposals()
         self.planning = planning or PlanningAgent()
         self.scheduling = scheduling or SchedulingAgent()
         self.diagnosis = diagnosis
+        self.prediction = prediction or OperationsPrediction()
+        self.reviews = reviews or getattr(reader, "reviews", None) or ReviewBoard()
         self._results: dict[str, tuple[str, DecisionResult]] = {}
         self._lock = Lock()
 
@@ -44,9 +49,35 @@ class OrchestrateAgent:
                 return deepcopy(result)
             result = self._process(event)
             # Stale decisions are retryable against a fresh baseline.
-            if result.status != "STALE":
+            if result.status not in {"STALE", "PENDING_HITL"}:
                 self._results[event.event.id] = signature, deepcopy(result)
             return result
+
+    def prepare(self, notice: MapsEvent):
+        """Read-only speculative preparation; no solver decision or MES write."""
+        with self._lock:
+            return self._prepare(notice)
+
+    def _prepare(self, notice):
+        if notice.event.kind in {"receipt.delayed", "inventory.corrected"}:
+            return {"status": "OUT_OF_SCOPE", "risks": []}
+        context = DataCollect().collect(self.reader.read_baseline(), notice)
+        errors = admission_errors(context)
+        if errors:
+            return {"status": "NOT_ADMITTED", "errors": errors}
+        risks = self.prediction.forecast(context)
+        if not risks:
+            return {"status": "NO_PREDICTED_CONFLICT", "risks": []}
+        gate = QuickRespond().assess(context)
+        package = self.planning.prepare(context, gate.scope)
+        if not hasattr(self.planning.optimizer, "prepare"):
+            return {"status": "PREPARATION_UNSUPPORTED", "risks": risks}
+        audit = self.planning.optimizer.prepare(context, package)
+        # Warm actual resource maps, not fictitious model/solver latency.
+        scheduling = self.scheduling.prepare(context)
+        return {"status": "PREPARED", "risks": risks, "planning": audit,
+                "scheduling": scheduling,
+                "mes_version": context.baseline.version, "execution_authorized": False}
 
     def _process(self, event: MapsEvent) -> DecisionResult:
         started = monotonic()
@@ -68,6 +99,11 @@ class OrchestrateAgent:
 
         gate = QuickRespond().assess(context)
         bus.send("quick_respond", "orchestrate", "gate.assessed", asdict(gate))
+        if event.event.kind in {"receipt.delayed", "inventory.corrected"}:
+            return finish("OUT_OF_SCOPE", "current route covers already-ready factory work")
+        errors = admission_errors(context)
+        if errors:
+            return finish("NOT_ADMITTED", "production requirements must be confirmed upstream", errors=errors)
         if gate.elapsed_seconds >= gate.budget_seconds:
             return finish("ESCALATED", "gate exceeded its budget; no automatic writeback")
         safety = safety_status(context)
@@ -80,7 +116,8 @@ class OrchestrateAgent:
         if not gate.need_replan:
             return finish("KEEP", gate.reasons[0], plan=baseline.plan)
         package = self.planning.prepare(context, gate.scope)
-        evidence = list(package.forecasts)
+        evidence = self.prediction.forecast(context)
+        bus.send("prediction", "orchestrate", "operations.forecast", {"risks": evidence})
         if self.diagnosis:
             try:
                 observations = self.diagnosis.observations(context)
@@ -92,7 +129,7 @@ class OrchestrateAgent:
                 bus.send("diagnosis", "orchestrate", "diagnosis.unavailable", {"effect": "continue deterministic evidence"})
         bus.send("planning", "orchestrate", "planning.work_package", {
             "scope": package.scope, "frozen": sorted(package.frozen_ids),
-            "work_orders": [asdict(w) for w in package.work_orders], "forecasts": evidence})
+            "work_orders": [asdict(w) for w in package.work_orders]})
 
         def propose(items):
             try:
@@ -108,7 +145,10 @@ class OrchestrateAgent:
         proposal = propose(evidence)
         if proposal.action == "ESCALATE":
             return finish("ESCALATED", proposal.rationale)
-        planning_candidate = self.planning.optimize(context, package)
+        try:
+            planning_candidate = self.planning.optimize(context, package)
+        except ValueError:
+            return finish("ESCALATED", "fixed production work cannot be preserved under updated constraints")
         wo_windows = []
         for wo in package.work_orders:
             assignments = [a for a in planning_candidate.plan.assignments if a.order_id == wo.wo_id]
@@ -134,8 +174,29 @@ class OrchestrateAgent:
                 "priority": event.priority.value})
             return finish("ESCALATED", "unresolved constraint/material conflict", errors=sorted(set(errors)))
         candidate.plan.metrics = measure(context.snapshot, candidate.plan, baseline.plan)
+        binding = decision_binding(context, candidate.plan)
+        review_ids = []
+        role_outputs = {
+            "orchestrate": {"risks": evidence, "proposal": asdict(proposal)},
+            "planning": {"gate": {"scope": gate.scope, "reasons": gate.reasons},
+                         "work_order_windows": wo_windows},
+            "scheduling": {"assignments": candidate.plan.to_dict()["assignments"],
+                           "solver": candidate.solver},
+            "warehouse": {"confirmed_current_allocations": candidate.plan.reservations}}
+        for module in REVIEW_MODULES:
+            review = self.reviews.request(module, binding, {
+                "event_id": event.event.id, "mes_version": baseline.version,
+                "scope": list(package.scope), "plan": candidate.plan.to_dict(),
+                "module_output": role_outputs[module],
+                "note": "review this module's output; all approvals required for writeback"})
+            bus.send(module, "human_review", "module.review", review)
+            review_ids.append(review["id"])
+            if review["status"] == "rejected":
+                return finish("REJECTED", f"human reviewer rejected {module} output")
+        if not self.reviews.verify(review_ids, binding, allow_simulated=True):
+            return finish("PENDING_HITL", "all module outputs require human review", plan=candidate.plan)
         patch = MESPatch(f"{event.event.id}:v{baseline.version}", baseline.version,
-                         context, package.scope, candidate.plan)
+                         context, package.scope, candidate.plan, tuple(review_ids))
         bus.send("orchestrate", "mes_gateway", "patch.validated", {
             "patch_id": patch.patch_id, "expected_version": baseline.version,
             "scope": package.scope, "solver": candidate.solver})

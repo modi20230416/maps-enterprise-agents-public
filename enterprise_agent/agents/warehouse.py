@@ -11,14 +11,26 @@ class WarehouseAgent:
     Confirmations are simulated reservations. No stock mutation occurs in WMS.
     """
 
+    def prepare(self, context):
+        from enterprise_agent.infrastructure.mes import fingerprint
+        self._prepared_key = fingerprint(context.snapshot.to_dict())
+        self._prepared_orders = {o.id: o for o in context.snapshot.orders}
+
     def confirm(self, context: DecisionContext, plan: Plan) -> tuple[list[dict], list[dict], list[str]]:
         bus = TraceLog(context.event.event.id)
         warehouse = MaterialAllocator(context.snapshot, bus)
+        from enterprise_agent.infrastructure.mes import fingerprint
+        hit = (getattr(self, "_prepared_key", None) == fingerprint(context.snapshot.to_dict()))
+        if not hit:
+            self.prepare(context)
+        orders = tuple(self._prepared_orders.values())
+        bus.send("warehouse", "scheduling", "readiness.context_consumed", {"cache_hit": hit,
+                 "scope": "confirmed current readiness; no inventory forecast"})
         starts = {o.id: next((a.start for a in plan.assignments if a.order_id == o.id
                              and a.operation_id == o.operations[0].id), None)
-                  for o in context.snapshot.orders}
+                  for o in orders}
         reservations, conflicts = [], []
-        for order in sorted((o for o in context.snapshot.orders if starts[o.id] is not None),
+        for order in sorted((o for o in orders if starts[o.id] is not None),
                             key=lambda o: (starts[o.id], -o.priority, o.id)):
             ready, allocations, reason = warehouse.reserve(order)
             if ready is None or ready > starts[order.id]:

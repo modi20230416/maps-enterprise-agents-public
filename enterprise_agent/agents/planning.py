@@ -1,4 +1,4 @@
-"""Planning: read-only collection, fast gate, forecast and WO work package."""
+"""Planning: admitted factory work, impact gate and WO optimization. No forecast."""
 
 from __future__ import annotations
 
@@ -6,10 +6,9 @@ from dataclasses import replace
 from time import monotonic
 
 from enterprise_agent.capabilities.collection import EventCollector
-from enterprise_agent.capabilities.prediction import KnownRiskPredictor
 from enterprise_agent.capabilities.scheduling import measure, validate_plan
 from enterprise_agent.domain.contracts import DecisionContext, GateDecision, MapsEvent, MESBaseline, PRIORITY_WEIGHTS, Priority, WorkOrder, WorkPackage
-from enterprise_agent.domain.ports import ConstraintSolver, ForecastProvider
+from enterprise_agent.domain.ports import ConstraintSolver
 
 
 class DataCollect:
@@ -22,7 +21,8 @@ class DataCollect:
             order["priority"] = PRIORITY_WEIGHTS[event.priority]
             payload["order"] = order
             normalized = replace(normalized, payload=payload)
-            catalog.append(WorkOrder(payload["mo_id"], order["id"], event.priority))
+            catalog.append(WorkOrder(payload["mo_id"], order["id"], event.priority,
+                                     production_ready=payload.get("production_ready", False)))
         snapshot = EventCollector.apply(baseline.snapshot, normalized)
         return DecisionContext(baseline, snapshot, tuple(catalog), event)
 
@@ -43,7 +43,7 @@ class QuickRespond:
             reasons.append("high or emergency MO insertion")
         if context.event.safety_actions:
             reasons.append("safety action requested")
-        # Bounded closure through shared machines/materials. Unrelated WOs stay fixed.
+        # Ready-task factory scope follows shared machines, not inventory forecasts.
         orders = {o.id: o for o in snapshot.orders}
         if event.kind == "order.created":
             scope = {event.payload["order"]["id"]}
@@ -56,17 +56,13 @@ class QuickRespond:
                 material = next(r.material for r in snapshot.receipts if r.id == event.payload["receipt_id"])
             scope = {o.id for o in orders.values() if material in o.materials}
         else:
-            risks = KnownRiskPredictor.predict(snapshot, baseline)
-            scope = {r["order_id"] for r in risks if "order_id" in r}
-            scope.update(baseline.blocked)
+            scope = set(baseline.blocked)
             if reasons and not scope:
                 scope.update(orders)
         while True:
             machines = {m for oid in scope for op in orders[oid].operations for m in op.machines}
-            materials = {m for oid in scope for m in orders[oid].materials}
             expanded = scope | {o.id for o in orders.values() if
-                                materials.intersection(o.materials) or any(
-                                    machines.intersection(op.machines) for op in o.operations)}
+                                any(machines.intersection(op.machines) for op in o.operations)}
             if expanded == scope:
                 break
             scope = expanded
@@ -76,24 +72,14 @@ class QuickRespond:
                             tuple(reasons or ["baseline feasible; no effective change"]), elapsed)
 
 
-class KnownWindowPrediction:
-    """Known calendar/ETA evidence, not trained probabilistic forecasts."""
-
-    def forecast(self, context: DecisionContext) -> list[dict]:
-        return [{**risk, "source": "known_calendar_and_eta", "confidence_interval": None}
-                for risk in KnownRiskPredictor.predict(context.snapshot, context.baseline.plan)]
-
-
 class PlanningAgent:
-    def __init__(self, prediction: ForecastProvider | None = None,
-                 optimizer: ConstraintSolver | None = None):
+    def __init__(self, optimizer: ConstraintSolver | None = None):
         from enterprise_agent.capabilities.local_search import LocalSearchSolver
-        self.prediction = prediction or KnownWindowPrediction()
         self.optimizer = optimizer or LocalSearchSolver()
 
     def prepare(self, context: DecisionContext, scope: tuple[str, ...]) -> WorkPackage:
         return WorkPackage(tuple(w for w in context.work_orders if w.wo_id in scope),
-                           scope, context.frozen_ids, tuple(self.prediction.forecast(context)))
+                           scope, context.frozen_ids)
 
     def optimize(self, context: DecisionContext, package: WorkPackage):
         """Planning produces a local WO proposal with a detailed OP seed plan."""

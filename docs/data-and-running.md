@@ -1,3 +1,5 @@
+> 已就绪任务通过 `production_ready` 传入企业确认结果；原型另查当前库存和备料状态。未就绪任务不依赖未来到货排入生产。关键技术验证见 [技术路线](operations-route.md)。
+
 > 当前目录与模块路径见 [代码结构](code-layout.md)。
 
 # 数据与运行
@@ -16,10 +18,10 @@
 
 | 事件类型 | 监控对象 | payload |
 |---|---|---|
-| `order.created` | 插入工单 | `mo_id`、完整 `order` |
+| `order.created` | 插入工单 | `mo_id`、完整 `order`、`production_ready: true` |
 | `machine.unavailable` | 设备 | `machine_id`、`start`、`end` |
-| `receipt.delayed` | 库存/到货 | `receipt_id`、`eta` |
-| `inventory.corrected` | 库存 | `material`、`quantity` |
+| `receipt.delayed` | 当前主路线不处理 | 返回 OUT_OF_SCOPE |
+| `inventory.corrected` | 当前主路线不处理 | 返回 OUT_OF_SCOPE |
 | `planning.tick` | 计划/执行检查 | 可为空 |
 
 每个框架事件还包含 `id`、`at`、`priority`，以及可选 `safety_actions`。安全动作只接受 preempt/changeover/process_parameter_change。优先级标签通过固定字典转换为订单权重，不能用任意字符串覆盖。
@@ -34,7 +36,7 @@ python -m enterprise_agent framework-demo --scenario high_order
 python -m enterprise_agent framework-demo --input examples/maps_framework.json --scenario no_change
 ```
 
-每个内置场景重新装载合成 MES 基线，互不继承状态。高优先级插单演示结果：
+每个内置场景重新装载合成 MES 基线，互不继承状态。高优先级插单候选如下；默认等待四模块审核，不会直接写回：
 
 | 工单 | 机台 | 原计划 | 新计划 |
 |---|---|---|---|
@@ -43,7 +45,7 @@ python -m enterprise_agent framework-demo --input examples/maps_framework.json -
 | WO-HIGH，新插单 | M1 | 无 | 20–35 |
 | WO-OTHER，范围外 | M2 | 80–90 | 80–90 |
 
-`APPLIED` 只表示内存 MES 接受补丁。其他结果包括 KEEP、PENDING_HITL、REJECTED、ESCALATED、STALE、WRITE_REJECTED。报告的 `trace` 包含事件、门卫、提案、工单优化、物料协商、冲突、校验及版本确认。
+`APPLIED` 只表示内存 MES 接受补丁。其他结果包括 NOT_ADMITTED、OUT_OF_SCOPE、KEEP、PENDING_HITL、REJECTED、ESCALATED、STALE、WRITE_REJECTED。报告的 `trace` 包含事件、门卫、提案、工单优化、物料协商、冲突、校验及版本确认。
 
 KEEP 或拒绝分支不在内存 MES 中持久化外部观测，实际连接器每次必须读取最新上游状态。当前没有连续订阅或定时采集服务。
 

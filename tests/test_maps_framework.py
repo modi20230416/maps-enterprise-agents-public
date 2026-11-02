@@ -1,4 +1,4 @@
-"""MAPS acceptance tests: authoritative MES, scope, WIP, approval and LLM guards."""
+"""v14 acceptance tests: authoritative MES, scope, WIP, approval and LLM guards."""
 
 from copy import deepcopy
 from dataclasses import replace
@@ -11,6 +11,7 @@ import unittest
 
 from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig, LLMError
 from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
+from enterprise_agent.infrastructure.review import ReviewBoard, REVIEW_MODULES, decision_binding
 from enterprise_agent.domain.contracts import MapsEvent, MESPatch, Priority
 from enterprise_agent.application.demo import run_demo
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
@@ -31,7 +32,8 @@ class FrameworkTests(unittest.TestCase):
         self.data = json.loads(FIXTURE.read_text(encoding="utf-8"))
         self.baseline = parse_baseline(self.data["mes"])
         self.event = MapsEvent.parse(self.data["event"])
-        self.mes = InMemoryMES(self.baseline)
+        self.reviews = ReviewBoard(lambda req: {"approved": True, "reviewer": "test-fixture"}, simulated=True)
+        self.mes = InMemoryMES(self.baseline, reviews=self.reviews, allow_simulated_reviews=True)
 
     def context_and_candidate(self):
         context = DataCollect().collect(self.baseline, self.event)
@@ -42,7 +44,9 @@ class FrameworkTests(unittest.TestCase):
 
     def patch(self):
         context, gate, candidate = self.context_and_candidate()
-        return MESPatch("test-patch", 1, context, gate.scope, candidate.plan)
+        binding = decision_binding(context, candidate.plan)
+        ids = tuple(self.reviews.request(m, binding, {})["id"] for m in REVIEW_MODULES)
+        return MESPatch("test-patch", 1, context, gate.scope, candidate.plan, ids)
 
     def test_high_priority_replans_without_interrupting_wip_or_unrelated_work(self):
         result = OrchestrateAgent(self.mes, self.mes).process(self.event)
@@ -88,8 +92,8 @@ class FrameworkTests(unittest.TestCase):
 
     def test_material_shortage_escalates_and_preserves_mes(self):
         result = run_demo(str(FIXTURE), "material_conflict")["decision"]
-        self.assertEqual((result["status"], result["mes_version"]), ("ESCALATED", 1))
-        self.assertIn("arbitration.recorded", [m["kind"] for m in result["trace"]])
+        self.assertEqual((result["status"], result["mes_version"]), ("NOT_ADMITTED", 1))
+        self.assertFalse(any(m["kind"] == "patch.accepted" for m in result["trace"]))
 
     def test_unachievable_hard_due_date_does_not_silently_relax(self):
         event = deepcopy(self.data["event"])
@@ -202,7 +206,8 @@ class FrameworkTests(unittest.TestCase):
             result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(json.dumps(bad))).process(self.event)
             self.assertEqual(result.status, "APPLIED")
             self.assertIn("llm.fallback", [m["kind"] for m in result.trace])
-            self.mes = InMemoryMES(self.baseline)
+            self.reviews = ReviewBoard(lambda req: {"approved": True, "reviewer": "test-fixture"}, simulated=True)
+            self.mes = InMemoryMES(self.baseline, reviews=self.reviews, allow_simulated_reviews=True)
 
     def test_llm_failure_records_rules_fallback(self):
         result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(failure=True)).process(self.event)
@@ -247,8 +252,8 @@ class FrameworkTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             report = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual({k: v["decision"]["status"] for k, v in report.items()}, {
-                "high_order": "APPLIED", "emergency_review": "PENDING_HITL",
-                "material_conflict": "ESCALATED", "no_change": "KEEP"})
+                "high_order": "PENDING_HITL", "emergency_review": "PENDING_HITL",
+                "material_conflict": "NOT_ADMITTED", "no_change": "KEEP"})
 
 
 if __name__ == "__main__":

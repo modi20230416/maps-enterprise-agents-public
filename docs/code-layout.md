@@ -9,13 +9,15 @@
 enterprise_agent/
   agents/
     orchestrate.py       中枢：组织、协调、仲裁、写回
-    planning.py          计划：采集、门卫、预测、工单优化
+    planning.py          计划：采集、门卫、工单优化
     scheduling.py        排单：候选策略、工序安排、直接协商
-    warehouse.py         仓库：齐套确认与缺料反馈
+    warehouse.py         就绪复核：当前分配一致性与人工审核
+    prediction.py        编排层已知设备窗口前瞻
     proposals.py         LLM / 规则协调提案
   capabilities/
+    admission.py         已就绪任务准入
     collection.py        事件应用与规范化
-    prediction.py        已知日历、物料与交期风险
+    prediction.py        独立实验使用的风险计算
     scheduling.py        排程构造、评分、可行性校验
     local_search.py      保留冻结工单的局部优化
     materials.py         物料批次与数量分配
@@ -28,8 +30,10 @@ enterprise_agent/
   infrastructure/
     llm.py               HTTP 模型适配与工具 schema
     mes.py               内存 MES、版本校验
+    review.py            四模块审核与方案绑定
     trace.py             同步调用审计记录
   application/
+    operations_demo.py   前瞻预初始化与人机在环验证
     demo.py              主框架依赖组装与合成演示
   experiments/
     rule_orchestrator.py 早期规则编排实验
@@ -54,5 +58,5 @@ Agent 使用共享能力完成计算。底层的 `EventCollector`、`KnownRiskPr
 
 ## 运行入口
 
-主框架使用 `python -m enterprise_agent framework-demo`。
+本阶段验证使用 `python -m enterprise_agent operations-demo`；通用场景使用 `python -m enterprise_agent framework-demo`。
 `demo`、`run`、`benchmark`、`rl-demo`、`train-drl` 用于独立实验。

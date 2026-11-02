@@ -20,7 +20,12 @@ def write_json(path: str | Path, value: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="企业多 Agent 计划与排程原型（离线仿真）")
     commands = parser.add_subparsers(dest="command", required=True)
-    framework = commands.add_parser("framework-demo", help="运行 MES 协同三层框架")
+    operations = commands.add_parser("operations-demo", help="已就绪任务的前瞻预初始化与全模块人工复核")
+    operations.add_argument("--input", default="examples/operations_ready.json")
+    operations.add_argument("--review-mode", choices=["manual", "pending", "scripted"], default="manual")
+    operations.add_argument("--agent", choices=["rules", "llm"], default="rules")
+    operations.add_argument("--output", default="artifacts/operations-demo.json")
+    framework = commands.add_parser("framework-demo", help="运行MES 多智能体协同框架")
     framework.add_argument("--input", default="examples/maps_framework.json")
     framework.add_argument("--scenario", choices=["all", "high_order", "emergency_review", "material_conflict", "no_change"], default="all")
     framework.add_argument("--agent", choices=["rules", "llm"], default="rules")
@@ -57,6 +62,18 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--directory", default="examples")
     args = parser.parse_args(argv)
     try:
+        if args.command == "operations-demo":
+            from enterprise_agent.application.operations_demo import run_operations_demo
+            proposer = None
+            if args.agent == "llm":
+                from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig
+                from enterprise_agent.agents.proposals import LLMProposals
+                proposer = LLMProposals(LLMClient(LLMConfig.from_env()))
+            report = run_operations_demo(args.input, args.review_mode, proposer)
+            write_json(args.output, report)
+            print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
+            print(f"Report: {Path(args.output).resolve()}")
+            return 0
         if args.command == "framework-demo":
             from enterprise_agent.application.demo import DEMO_CASES, run_demo
             proposer = None
@@ -84,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             return 0
         if args.command == "rl-demo":
+            from enterprise_agent.domain.models import Snapshot, Event
             from enterprise_agent.experiments.dispatch_env import DispatchEnv
             from enterprise_agent.capabilities.collection import EventCollector
             case = scenarios()[args.scenario]

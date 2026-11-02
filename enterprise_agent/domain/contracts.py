@@ -1,4 +1,4 @@
-"""Versioned contracts for the MAPS framework; scheduling time is still minutes."""
+"""Versioned contracts for the v14 framework; scheduling time is still minutes."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ class Priority(str, Enum):
     LOW = "low"
 
 
-# Configurable demonstration weights; not measured production priorities.
+# Human-configured demonstration weights, not values claimed by the PPT.
 PRIORITY_WEIGHTS = {Priority.EMERGENCY: 100, Priority.HIGH: 10,
                     Priority.MEDIUM: 3, Priority.LOW: 1}
 RESPONSE_TARGET_SECONDS = {Priority.EMERGENCY: 300, Priority.HIGH: 30,
@@ -36,7 +36,7 @@ class MapsEvent:
 
     def __post_init__(self):
         if self.event.kind not in EVENT_OBJECTS:
-            raise ValueError("event kind is not in the MAPS event dictionary")
+            raise ValueError("event kind is not in the v14 event dictionary")
         if not isinstance(self.priority, Priority):
             raise ValueError("priority must use the four-level dictionary")
         if not set(self.safety_actions) <= SAFETY_ACTIONS:
@@ -62,6 +62,7 @@ class WorkOrder:
     priority: Priority
     status: str = "planned"
     interruptible: bool = False
+    production_ready: bool = False
 
     def __post_init__(self):
         identifier(self.mo_id, "mo_id")
@@ -72,6 +73,8 @@ class WorkOrder:
             raise ValueError("invalid work-order status")
         if type(self.interruptible) is not bool:
             raise ValueError("interruptible must be boolean")
+        if type(self.production_ready) is not bool:
+            raise ValueError("production_ready must be boolean")
 
 
 @dataclass
@@ -127,7 +130,6 @@ class WorkPackage:
     work_orders: tuple[WorkOrder, ...]
     scope: tuple[str, ...]
     frozen_ids: frozenset[str]
-    forecasts: tuple[dict, ...]
 
 
 @dataclass
@@ -145,6 +147,7 @@ class MESPatch:
     context: DecisionContext
     scope: tuple[str, ...]
     plan: Plan
+    review_ids: tuple[str, ...] = ()
 
 
 @dataclass

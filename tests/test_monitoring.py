@@ -47,6 +47,26 @@ class MonitoringTests(unittest.TestCase):
         self.assertEqual(result["preparation"]["status"], "SKIPPED")
         self.assertEqual(self.engine.planning.optimizer.preparation_builds, 0)
 
+    def test_prediction_evidence_triggers_actual_preparation_of_three_modules(self):
+        with patch.object(self.engine.prediction, "forecast", return_value=[]), \
+             patch.object(self.engine.planning.optimizer, "prepare") as planning:
+            result = self.engine.monitor(self.event(), initialize=True)
+            planning.assert_not_called()
+            self.assertEqual(result["preparation"]["status"], "SKIPPED")
+        with patch.object(self.engine.planning.optimizer, "prepare", wraps=self.engine.planning.optimizer.prepare) as planning, \
+             patch.object(self.engine.scheduling, "prepare", wraps=self.engine.scheduling.prepare) as scheduling, \
+             patch.object(self.engine.scheduling.warehouse, "prepare", wraps=self.engine.scheduling.warehouse.prepare) as warehouse:
+            result = self.engine.monitor(self.event(), initialize=True)
+            planning.assert_called_once()
+            scheduling.assert_called_once()
+            warehouse.assert_called_once()
+        initialized = result["preparation"]["module_initialization"]
+        self.assertEqual(set(initialized), {"planning", "scheduling", "warehouse"})
+        self.assertEqual({m["status"] for m in initialized.values()}, {"CONTEXT_READY"})
+        self.assertEqual(initialized["planning"]["work_order_count"], 1)
+        self.assertEqual(initialized["scheduling"]["resource_count"], 2)
+        self.assertEqual(initialized["warehouse"]["order_count"], 3)
+
     def test_repeated_notice_reuses_and_changed_window_rebuilds(self):
         first = self.engine.monitor(self.event(1), initialize=True)["preparation"]["planning"]
         repeat = self.engine.monitor(self.event(2), initialize=True)["preparation"]["planning"]

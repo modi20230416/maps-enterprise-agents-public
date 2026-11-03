@@ -150,6 +150,15 @@ class OrchestrateAgent:
         scheduling = self.scheduling.prepare(context)
         return {"status": "PREPARED", "risks": risks, "planning": audit,
                 "scheduling": scheduling,
+                "initialization_scope": "computation_context",
+                "module_initialization": {
+                    "planning": {"status": "CONTEXT_READY", "content": "local_solver_problem",
+                                 "work_order_count": len(package.work_orders),
+                                 "fixed_assignment_count": audit["fixed_assignments"]},
+                    "scheduling": {"status": "CONTEXT_READY", "content": "resource_calendar",
+                                   "resource_count": scheduling["resource_count"]},
+                    "warehouse": {"status": "CONTEXT_READY", "content": "current_order_index",
+                                  "order_count": scheduling["warehouse_order_count"]}},
                 "mes_version": context.baseline.version, "execution_authorized": False}
 
     def _process(self, event: MapsEvent) -> DecisionResult:

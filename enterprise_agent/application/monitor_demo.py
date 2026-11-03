@@ -55,6 +55,10 @@ def display_step(step):
     preparation = step["preparation"]
     print(f"  preparation={preparation['status']}; execution_authorized=False")
     if preparation["status"] == "PREPARED":
+        print("  Prediction -> Orchestrate -> downstream context initialization")
+        for module, state in preparation["module_initialization"].items():
+            counts = {k: v for k, v in state.items() if k.endswith("_count")}
+            print(f"  {module}: {state['status']}; content={state['content']}; {counts}")
         audit = preparation["planning"]
         print(f"  prepared_key={audit['prepared_key'][:16]}; "
               f"cache_hit={audit['cache_hit']}; builds={audit['preparation_builds']}")

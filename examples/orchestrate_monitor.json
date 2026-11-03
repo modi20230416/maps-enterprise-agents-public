@@ -1,0 +1,183 @@
+{
+  "description": "Synthetic, read-only observation replay at a single decision epoch. No production execution.",
+  "mes": {
+    "version": 1,
+    "snapshot": {
+      "now": 0,
+      "preparation_minutes": 0,
+      "lookahead_minutes": 120,
+      "machines": [
+        {
+          "id": "M1"
+        },
+        {
+          "id": "M2"
+        }
+      ],
+      "stock": {
+        "steel": 3
+      },
+      "receipts": [],
+      "orders": [
+        {
+          "id": "WO-RUN",
+          "priority": 10,
+          "due": 30,
+          "release": 0,
+          "materials": {
+            "steel": 1
+          },
+          "operations": [
+            {
+              "id": "OP-RUN",
+              "machines": [
+                "M1"
+              ],
+              "duration": 20
+            }
+          ]
+        },
+        {
+          "id": "WO-NORMAL",
+          "priority": 3,
+          "due": 100,
+          "release": 0,
+          "materials": {
+            "steel": 1
+          },
+          "operations": [
+            {
+              "id": "OP-NORMAL",
+              "machines": [
+                "M1"
+              ],
+              "duration": 30
+            }
+          ]
+        },
+        {
+          "id": "WO-OTHER",
+          "priority": 1,
+          "due": 120,
+          "release": 0,
+          "materials": {},
+          "operations": [
+            {
+              "id": "OP-OTHER",
+              "machines": [
+                "M2"
+              ],
+              "duration": 10
+            }
+          ]
+        }
+      ]
+    },
+    "work_orders": [
+      {
+        "mo_id": "MO-100",
+        "wo_id": "WO-RUN",
+        "priority": "high",
+        "status": "running",
+        "interruptible": false,
+        "production_ready": true
+      },
+      {
+        "mo_id": "MO-100",
+        "wo_id": "WO-NORMAL",
+        "priority": "medium",
+        "status": "planned",
+        "production_ready": true
+      },
+      {
+        "mo_id": "MO-200",
+        "wo_id": "WO-OTHER",
+        "priority": "low",
+        "status": "planned",
+        "production_ready": true
+      }
+    ],
+    "plan": {
+      "assignments": [
+        {
+          "order_id": "WO-RUN",
+          "operation_id": "OP-RUN",
+          "machine_id": "M1",
+          "start": 0,
+          "end": 20
+        },
+        {
+          "order_id": "WO-NORMAL",
+          "operation_id": "OP-NORMAL",
+          "machine_id": "M1",
+          "start": 20,
+          "end": 50
+        },
+        {
+          "order_id": "WO-OTHER",
+          "operation_id": "OP-OTHER",
+          "machine_id": "M2",
+          "start": 80,
+          "end": 90
+        }
+      ],
+      "blocked": {},
+      "reservations": [],
+      "strategy": "imported_mes_baseline"
+    }
+  },
+  "observations": [
+    {
+      "label": "正常基线检查",
+      "event": {
+        "id": "monitor-baseline",
+        "kind": "planning.tick",
+        "at": 0,
+        "priority": "low",
+        "payload": {}
+      }
+    },
+    {
+      "label": "收到未来设备窗口预告",
+      "event": {
+        "id": "monitor-future-window",
+        "kind": "machine.unavailable",
+        "at": 0,
+        "priority": "high",
+        "payload": {
+          "machine_id": "M1",
+          "start": 30,
+          "end": 45
+        }
+      }
+    },
+    {
+      "label": "重复窗口观察，复用已准备问题",
+      "event": {
+        "id": "monitor-repeat-window",
+        "kind": "machine.unavailable",
+        "at": 0,
+        "priority": "high",
+        "payload": {
+          "machine_id": "M1",
+          "start": 30,
+          "end": 45
+        }
+      }
+    },
+    {
+      "label": "设备窗口变化，失效后重新准备",
+      "event": {
+        "id": "monitor-changed-window",
+        "kind": "machine.unavailable",
+        "at": 0,
+        "priority": "high",
+        "payload": {
+          "machine_id": "M1",
+          "start": 30,
+          "end": 46
+        }
+      }
+    }
+  ]
+}

@@ -20,6 +20,10 @@ def write_json(path: str | Path, value: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="企业多 Agent 计划与排程原型（离线仿真）")
     commands = parser.add_subparsers(dest="command", required=True)
+    monitor = commands.add_parser("monitor-demo", help="Orchestrate只读监控、已知窗口前瞻与准备触发")
+    monitor.add_argument("--input", default="examples/orchestrate_monitor.json")
+    monitor.add_argument("--pause", action="store_true", help="每次观察后按回车继续，q停止")
+    monitor.add_argument("--output", default="artifacts/orchestrate-monitor-demo.json")
     operations = commands.add_parser("operations-demo", help="已就绪任务的前瞻预初始化与全模块人工复核")
     operations.add_argument("--input", default="examples/operations_ready.json")
     operations.add_argument("--review-mode", choices=["manual", "pending", "scripted"], default="manual")
@@ -62,6 +66,23 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--directory", default="examples")
     args = parser.parse_args(argv)
     try:
+        if args.command == "monitor-demo":
+            from enterprise_agent.application.monitor_demo import run_monitor_demo, display_step
+
+            def show_step(step):
+                display_step(step)
+                if args.pause:
+                    try:
+                        return input("Enter: next observation; q: stop > ").strip().lower() != "q"
+                    except EOFError:
+                        return False
+                return True
+
+            report = run_monitor_demo(args.input, show_step)
+            write_json(args.output, report)
+            print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
+            print(f"Report: {Path(args.output).resolve()}")
+            return 0
         if args.command == "operations-demo":
             from enterprise_agent.application.operations_demo import run_operations_demo
             proposer = None

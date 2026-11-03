@@ -9,6 +9,7 @@ MAPS 是一个面向离散制造的 Python 原型，展示 编排层前瞻、确
 需要 Python 3.11 或更新版本。规则模式使用 Python 标准库，无须 API 密钥。
 
 ```bash
+python -m enterprise_agent monitor-demo --pause
 python -m enterprise_agent operations-demo
 python -m enterprise_agent framework-demo
 python -m unittest discover -s tests -v
@@ -76,6 +77,7 @@ python -m enterprise_agent train-drl --episodes 400 --seed 42
 
 ## 文档与目录
 
+- [Orchestrate 监控与前瞻只读演示](docs/orchestrate-monitoring.md)
 - [当前技术路线与可执行验证](docs/operations-route.md)
 - [关键技术验证记录与演示顺序](docs/validation.md)
 - [架构和决策流程](docs/architecture.md)

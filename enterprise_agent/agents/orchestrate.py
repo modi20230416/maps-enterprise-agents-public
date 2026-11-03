@@ -58,6 +58,72 @@ class OrchestrateAgent:
         with self._lock:
             return self._prepare(notice)
 
+    def monitor(self, event: MapsEvent, *, initialize=False):
+        """Inspect an observation and optionally prepare context; never solve/write."""
+        with self._lock:
+            context, gate, observation = self._observe(event)
+            observation["preparation"] = {"status": "SKIPPED"}
+            if initialize and observation["should_prepare"]:
+                observation["preparation"] = self._initialize(
+                    context, gate, observation["risks"])
+                bus = TraceLog(event.event.id)
+                bus.messages = observation["trace"]
+                bus.send("orchestrate", "audit", "monitor.preparation_completed",
+                         observation["preparation"])
+            return observation
+
+    def _observe(self, event):
+        baseline = self.reader.read_baseline()
+        bus = TraceLog(event.event.id)
+        bus.send("mes_reader", "orchestrate", "monitor.observed", {
+            "event_id": event.event.id, "kind": event.event.kind,
+            "object": event.monitored_object, "mes_version": baseline.version,
+            "now": baseline.snapshot.now})
+        observation = {
+            "event_id": event.event.id, "event_kind": event.event.kind,
+            "monitored_object": event.monitored_object,
+            "mes_version": baseline.version, "now": baseline.snapshot.now,
+            "status": "OUT_OF_SCOPE", "risks": [], "current_conflicts": [],
+            "impact_scope": [], "should_prepare": False,
+            "execution_authorized": False, "trace": bus.messages}
+        if event.event.kind in {"receipt.delayed", "inventory.corrected"}:
+            return None, None, observation
+        context = DataCollect().collect(baseline, event)
+        snapshot = context.snapshot
+        observation.update(
+            monitored_state={"machine_count": len(snapshot.machines),
+                             "work_order_count": len(context.work_orders),
+                             "assignment_count": len(baseline.plan.assignments)},
+            frozen_order_ids=sorted(context.frozen_ids),
+            lookahead_end=snapshot.now + snapshot.lookahead_minutes)
+        errors = admission_errors(context)
+        if errors:
+            observation.update(status="NOT_ADMITTED", errors=errors)
+            bus.send("orchestrate", "human_review", "monitor.admission_rejected", {"errors": errors})
+            return context, None, observation
+        gate = QuickRespond().assess(context)
+        machines = {m.id: m for m in snapshot.machines}
+        current = []
+        for assignment in baseline.plan.assignments:
+            for start, end in machines[assignment.machine_id].unavailable:
+                if start <= snapshot.now < end and assignment.start < end and assignment.end > max(start, snapshot.now):
+                    current.append({"order_id": assignment.order_id,
+                                    "machine_id": assignment.machine_id,
+                                    "unavailable_window": [start, end]})
+        risks = self.prediction.forecast(context)
+        should_prepare = bool(risks) and not current and not event.safety_actions
+        status = "CURRENT_CONFLICT" if current else "FORECAST_RISK" if risks else "NORMAL"
+        observation.update(status=status, risks=risks, current_conflicts=current,
+                           impact_scope=list(gate.scope), should_prepare=should_prepare)
+        bus.send("prediction", "orchestrate", "monitor.lookahead_assessed", {
+            "status": status, "risks": risks, "current_conflicts": current,
+            "lookahead_end": observation["lookahead_end"],
+            "rule": "future known device window intersects baseline assignment"})
+        bus.send("orchestrate", "downstream_preparation", "monitor.preparation_decided", {
+            "should_prepare": should_prepare, "scope": list(gate.scope),
+            "execution_authorized": False})
+        return context, gate, observation
+
     def _prepare(self, notice):
         if notice.event.kind in {"receipt.delayed", "inventory.corrected"}:
             return {"status": "OUT_OF_SCOPE", "risks": []}
@@ -69,10 +135,17 @@ class OrchestrateAgent:
         if not risks:
             return {"status": "NO_PREDICTED_CONFLICT", "risks": []}
         gate = QuickRespond().assess(context)
+        return self._initialize(context, gate, risks)
+
+    def _initialize(self, context, gate, risks):
         package = self.planning.prepare(context, gate.scope)
         if not hasattr(self.planning.optimizer, "prepare"):
             return {"status": "PREPARATION_UNSUPPORTED", "risks": risks}
-        audit = self.planning.optimizer.prepare(context, package)
+        try:
+            audit = self.planning.optimizer.prepare(context, package)
+        except ValueError as exc:
+            return {"status": "PREPARATION_BLOCKED", "reason": str(exc),
+                    "execution_authorized": False}
         # Warm actual resource maps, not fictitious model/solver latency.
         scheduling = self.scheduling.prepare(context)
         return {"status": "PREPARED", "risks": risks, "planning": audit,

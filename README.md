@@ -8,6 +8,8 @@ MAPS 是一个面向离散制造的 Python 原型，展示 编排层前瞻、确
 
 新增独立前端、HTTP API、有界并发任务进程，以及 SQLite 持久化、逐模块复核和事件回放。配置与演示步骤见 [平台运行说明](docs/platform-runtime.md)。
 
+按步骤操作与现场讲解词见 [Trae 演示流程](docs/trae-demo.md)。
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[web,web-test,drl]"

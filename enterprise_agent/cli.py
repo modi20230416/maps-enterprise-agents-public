@@ -20,10 +20,11 @@ def write_json(path: str | Path, value: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="企业多 Agent 计划与排程原型（离线仿真）")
     commands = parser.add_subparsers(dest="command", required=True)
-    monitor = commands.add_parser("monitor-demo", help="Orchestrate只读监控、已知窗口前瞻与准备触发")
-    monitor.add_argument("--input", default="examples/orchestrate_monitor.json")
+    monitor = commands.add_parser("monitor-demo", help="LLM前瞻推理与按需模块准备；日历规则仅作显式对照")
+    monitor.add_argument("--prediction", choices=["llm", "calendar"], default="llm")
+    monitor.add_argument("--input", default=None)
     monitor.add_argument("--pause", action="store_true", help="每次观察后按回车继续，q停止")
-    monitor.add_argument("--output", default="artifacts/orchestrate-monitor-demo.json")
+    monitor.add_argument("--output", default=None)
     operations = commands.add_parser("operations-demo", help="已就绪任务的前瞻预初始化与全模块人工复核")
     operations.add_argument("--input", default="examples/operations_ready.json")
     operations.add_argument("--review-mode", choices=["manual", "pending", "scripted"], default="manual")
@@ -67,6 +68,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "monitor-demo":
+            if args.prediction == "llm":
+                from enterprise_agent.agents.prediction import LLMPrediction
+                from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig
+                from enterprise_agent.application.llm_monitor_demo import run_llm_monitor_demo, display_llm_monitor
+                prediction = LLMPrediction(LLMClient(LLMConfig.from_env()))
+                if args.pause:
+                    input("Enter: call the configured LLM using current/past observations > ")
+                report = run_llm_monitor_demo(args.input or "examples/orchestrate_llm.json", prediction)
+                output = args.output or "artifacts/orchestrate-llm-live.json"
+                write_json(output, report)
+                display_llm_monitor(report)
+                print(f"Report: {Path(output).resolve()}")
+                return 1 if report["summary"]["status"] == "PREDICTION_UNAVAILABLE" else 0
             from enterprise_agent.application.monitor_demo import run_monitor_demo, display_step
 
             def show_step(step):
@@ -78,10 +92,12 @@ def main(argv: list[str] | None = None) -> int:
                         return False
                 return True
 
-            report = run_monitor_demo(args.input, show_step)
-            write_json(args.output, report)
+            report = run_monitor_demo(args.input or "examples/orchestrate_monitor.json", show_step)
+            output = args.output or "artifacts/orchestrate-calendar-baseline.json"
+            report["summary"]["prediction_source"] = "known_calendar_rules"
+            write_json(output, report)
             print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
-            print(f"Report: {Path(args.output).resolve()}")
+            print(f"Report: {Path(output).resolve()}")
             return 0
         if args.command == "operations-demo":
             from enterprise_agent.application.operations_demo import run_operations_demo

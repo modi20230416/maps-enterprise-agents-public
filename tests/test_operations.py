@@ -7,7 +7,7 @@ import unittest
 
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
 from enterprise_agent.agents.planning import DataCollect, QuickRespond, PlanningAgent
-from enterprise_agent.agents.prediction import OperationsPrediction
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.application.operations_demo import run_operations_demo
 from enterprise_agent.capabilities.local_search import LocalSearchSolver
 from enterprise_agent.domain.contracts import MapsEvent, MESPatch
@@ -42,7 +42,7 @@ class OperationsTests(unittest.TestCase):
         source = inspect.getsource(PlanningAgent)
         self.assertNotIn("forecast", source)
         ctx = DataCollect().collect(self.baseline, self.event)
-        self.assertEqual({r["kind"] for r in OperationsPrediction().forecast(ctx)},
+        self.assertEqual({r["kind"] for r in KnownCalendarLookahead().forecast(ctx)},
                          {"future_capacity_conflict"})
 
     def test_proposal_provider_receives_factory_risks_without_approval_authority(self):
@@ -110,7 +110,7 @@ class OperationsTests(unittest.TestCase):
         other = deepcopy(self.data["mes"])
         other["snapshot"]["receipts"] = [{"id": "unused-receipt", "material": "steel", "quantity": 99, "eta": 900}]
         ctx = DataCollect().collect(parse_baseline(other), self.event)
-        risks = OperationsPrediction().forecast(ctx)
+        risks = KnownCalendarLookahead().forecast(ctx)
         self.assertTrue(risks)
         self.assertFalse(any("material" in r["kind"] or "inventory" in r["kind"] for r in risks))
 

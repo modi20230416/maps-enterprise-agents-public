@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from threading import Lock
 from time import monotonic
 
@@ -12,13 +12,13 @@ from enterprise_agent.capabilities.scheduling import measure
 from enterprise_agent.infrastructure.trace import TraceLog
 from enterprise_agent.infrastructure.mes import fingerprint
 from enterprise_agent.domain.contracts import DecisionResult, MapsEvent, MESPatch, RESPONSE_TARGET_SECONDS
-from enterprise_agent.agents.planning import DataCollect, PlanningAgent, QuickRespond
+from enterprise_agent.agents.planning import DataCollect, PlanningAgent, QuickRespond, expand_factory_scope
 from enterprise_agent.domain.ports import DiagnosisProvider, MESReader, MESWriter, ProposalProvider, StaleMESVersion
 from enterprise_agent.agents.proposals import RuleProposals
 from enterprise_agent.agents.scheduling import SchedulingAgent
 from enterprise_agent.capabilities.validation import safety_status, validate_candidate, validate_proposal
 from enterprise_agent.capabilities.admission import admission_errors
-from enterprise_agent.agents.prediction import OperationsPrediction
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.infrastructure.review import ReviewBoard, REVIEW_MODULES, decision_binding
 
 
@@ -33,7 +33,9 @@ class OrchestrateAgent:
         self.planning = planning or PlanningAgent()
         self.scheduling = scheduling or SchedulingAgent()
         self.diagnosis = diagnosis
-        self.prediction = prediction or OperationsPrediction()
+        # Legacy calendar scenarios use an explicitly labelled rules baseline.
+        # The monitor-demo LLM entry injects LLMPrediction here.
+        self.prediction = prediction or KnownCalendarLookahead()
         self.reviews = reviews or getattr(reader, "reviews", None) or ReviewBoard()
         self._results: dict[str, tuple[str, DecisionResult]] = {}
         self._lock = Lock()
@@ -65,7 +67,7 @@ class OrchestrateAgent:
             observation["preparation"] = {"status": "SKIPPED"}
             if initialize and observation["should_prepare"]:
                 observation["preparation"] = self._initialize(
-                    context, gate, observation["risks"])
+                    context, gate, observation["risks"], observation["requested_modules"])
                 bus = TraceLog(event.event.id)
                 bus.messages = observation["trace"]
                 bus.send("orchestrate", "audit", "monitor.preparation_completed",
@@ -85,6 +87,8 @@ class OrchestrateAgent:
             "mes_version": baseline.version, "now": baseline.snapshot.now,
             "status": "OUT_OF_SCOPE", "risks": [], "current_conflicts": [],
             "impact_scope": [], "should_prepare": False,
+            "prediction_source": getattr(self.prediction, "source", "external"),
+            "requested_modules": [],
             "execution_authorized": False, "trace": bus.messages}
         if event.event.kind in {"receipt.delayed", "inventory.corrected"}:
             return None, None, observation
@@ -110,15 +114,30 @@ class OrchestrateAgent:
                     current.append({"order_id": assignment.order_id,
                                     "machine_id": assignment.machine_id,
                                     "unavailable_window": [start, end]})
-        risks = self.prediction.forecast(context)
+        try:
+            risks = self.prediction.forecast(context)
+        except (LLMError, ValueError, TypeError, KeyError, OSError):
+            observation.update(status="PREDICTION_UNAVAILABLE", current_conflicts=current,
+                               prediction_error="model call or forecast validation failed; no rules substitution")
+            bus.send("prediction", "orchestrate", "monitor.prediction_unavailable", {
+                "effect": "hold preparation", "rules_fallback": False})
+            return context, gate, observation
+        if observation["prediction_source"] == "llm":
+            seeds = {oid for risk in risks for oid in risk["affected_order_ids"]}
+            gate = replace(gate, scope=expand_factory_scope(context, seeds))
+            requested = sorted({m["module"] for risk in risks for m in risk["module_requests"]})
+            observation["prediction_call"] = getattr(self.prediction, "last_call", None)
+        else:
+            requested = ["planning", "scheduling", "warehouse"] if risks else []
         should_prepare = bool(risks) and not current and not event.safety_actions
         status = "CURRENT_CONFLICT" if current else "FORECAST_RISK" if risks else "NORMAL"
         observation.update(status=status, risks=risks, current_conflicts=current,
-                           impact_scope=list(gate.scope), should_prepare=should_prepare)
+                           impact_scope=list(gate.scope), should_prepare=should_prepare,
+                           requested_modules=requested)
         bus.send("prediction", "orchestrate", "monitor.lookahead_assessed", {
             "status": status, "risks": risks, "current_conflicts": current,
             "lookahead_end": observation["lookahead_end"],
-            "rule": "future known device window intersects baseline assignment"})
+            "source": observation["prediction_source"]})
         bus.send("orchestrate", "downstream_preparation", "monitor.preparation_decided", {
             "should_prepare": should_prepare, "scope": list(gate.scope),
             "execution_authorized": False})
@@ -137,28 +156,41 @@ class OrchestrateAgent:
         gate = QuickRespond().assess(context)
         return self._initialize(context, gate, risks)
 
-    def _initialize(self, context, gate, risks):
-        package = self.planning.prepare(context, gate.scope)
-        if not hasattr(self.planning.optimizer, "prepare"):
+    def _initialize(self, context, gate, risks, requested_modules=None):
+        requested = set(["planning", "scheduling", "warehouse"] if requested_modules is None else requested_modules)
+        if not requested or not requested <= {"planning", "scheduling", "warehouse"}:
+            raise ValueError("invalid downstream preparation modules")
+        # Scheduling's current preparation includes a Warehouse dependency.
+        effective = requested | ({"warehouse"} if "scheduling" in requested else set())
+        if "planning" in effective and not hasattr(self.planning.optimizer, "prepare"):
             return {"status": "PREPARATION_UNSUPPORTED", "risks": risks}
+        audit, scheduling, states = {}, {}, {}
         try:
-            audit = self.planning.optimizer.prepare(context, package)
+            if "planning" in effective:
+                package = self.planning.prepare(context, gate.scope)
+                audit = self.planning.optimizer.prepare(context, package)
+                states["planning"] = {"status": "CONTEXT_READY", "content": "local_solver_problem",
+                                      "work_order_count": len(package.work_orders),
+                                      "fixed_assignment_count": audit["fixed_assignments"]}
         except ValueError as exc:
             return {"status": "PREPARATION_BLOCKED", "reason": str(exc),
                     "execution_authorized": False}
         # Warm actual resource maps, not fictitious model/solver latency.
-        scheduling = self.scheduling.prepare(context)
+        if "scheduling" in effective:
+            scheduling = self.scheduling.prepare(context)
+            states["scheduling"] = {"status": "CONTEXT_READY", "content": "resource_calendar",
+                                    "resource_count": scheduling["resource_count"]}
+        elif "warehouse" in effective:
+            self.scheduling.warehouse.prepare(context)
+        if "warehouse" in effective:
+            states["warehouse"] = {"status": "CONTEXT_READY", "content": "current_order_index",
+                                   "order_count": len(self.scheduling.warehouse._prepared_orders)}
         return {"status": "PREPARED", "risks": risks, "planning": audit,
                 "scheduling": scheduling,
                 "initialization_scope": "computation_context",
-                "module_initialization": {
-                    "planning": {"status": "CONTEXT_READY", "content": "local_solver_problem",
-                                 "work_order_count": len(package.work_orders),
-                                 "fixed_assignment_count": audit["fixed_assignments"]},
-                    "scheduling": {"status": "CONTEXT_READY", "content": "resource_calendar",
-                                   "resource_count": scheduling["resource_count"]},
-                    "warehouse": {"status": "CONTEXT_READY", "content": "current_order_index",
-                                  "order_count": scheduling["warehouse_order_count"]}},
+                "requested_modules": sorted(requested),
+                "dependency_added_modules": sorted(effective - requested),
+                "module_initialization": states,
                 "mes_version": context.baseline.version, "execution_authorized": False}
 
     def _process(self, event: MapsEvent) -> DecisionResult:

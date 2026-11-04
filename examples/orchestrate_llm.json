@@ -1,0 +1,166 @@
+{
+  "description": "Synthetic LLM input. Baseline contains remaining work from now=20; runtime observations retain prior total progress. No future unavailability is supplied.",
+  "mes": {
+    "version": 1,
+    "snapshot": {
+      "now": 20,
+      "preparation_minutes": 0,
+      "lookahead_minutes": 90,
+      "machines": [
+        {
+          "id": "M1"
+        },
+        {
+          "id": "M2"
+        }
+      ],
+      "stock": {
+        "steel": 3
+      },
+      "receipts": [],
+      "orders": [
+        {
+          "id": "WO-RUN",
+          "priority": 10,
+          "due": 65,
+          "release": 0,
+          "materials": {
+            "steel": 1
+          },
+          "operations": [
+            {
+              "id": "OP-RUN",
+              "machines": [
+                "M1"
+              ],
+              "duration": 30
+            }
+          ]
+        },
+        {
+          "id": "WO-NORMAL",
+          "priority": 3,
+          "due": 100,
+          "release": 0,
+          "materials": {
+            "steel": 1
+          },
+          "operations": [
+            {
+              "id": "OP-NORMAL",
+              "machines": [
+                "M1"
+              ],
+              "duration": 30
+            }
+          ]
+        },
+        {
+          "id": "WO-OTHER",
+          "priority": 1,
+          "due": 120,
+          "release": 0,
+          "materials": {},
+          "operations": [
+            {
+              "id": "OP-OTHER",
+              "machines": [
+                "M2"
+              ],
+              "duration": 10
+            }
+          ]
+        }
+      ]
+    },
+    "work_orders": [
+      {
+        "mo_id": "MO-100",
+        "wo_id": "WO-RUN",
+        "priority": "high",
+        "status": "running",
+        "interruptible": false,
+        "production_ready": true
+      },
+      {
+        "mo_id": "MO-100",
+        "wo_id": "WO-NORMAL",
+        "priority": "medium",
+        "status": "planned",
+        "production_ready": true
+      },
+      {
+        "mo_id": "MO-200",
+        "wo_id": "WO-OTHER",
+        "priority": "low",
+        "status": "planned",
+        "production_ready": true
+      }
+    ],
+    "plan": {
+      "assignments": [
+        {
+          "order_id": "WO-RUN",
+          "operation_id": "OP-RUN",
+          "machine_id": "M1",
+          "start": 20,
+          "end": 50
+        },
+        {
+          "order_id": "WO-NORMAL",
+          "operation_id": "OP-NORMAL",
+          "machine_id": "M1",
+          "start": 50,
+          "end": 80
+        },
+        {
+          "order_id": "WO-OTHER",
+          "operation_id": "OP-OTHER",
+          "machine_id": "M2",
+          "start": 80,
+          "end": 90
+        }
+      ],
+      "blocked": {},
+      "reservations": [],
+      "strategy": "imported_mes_baseline"
+    }
+  },
+  "event": {
+    "id": "runtime-progress-check",
+    "kind": "planning.tick",
+    "at": 20,
+    "priority": "medium",
+    "payload": {
+      "runtime_observations": [
+        {
+          "id": "OBS-01",
+          "at": 0,
+          "machine_id": "M1",
+          "order_id": "WO-RUN",
+          "operation_id": "OP-RUN",
+          "progress": 0.0,
+          "machine_state": "processing"
+        },
+        {
+          "id": "OBS-02",
+          "at": 10,
+          "machine_id": "M1",
+          "order_id": "WO-RUN",
+          "operation_id": "OP-RUN",
+          "progress": 0.12,
+          "machine_state": "processing"
+        },
+        {
+          "id": "OBS-03",
+          "at": 20,
+          "machine_id": "M1",
+          "order_id": "WO-RUN",
+          "operation_id": "OP-RUN",
+          "progress": 0.24,
+          "machine_state": "processing"
+        }
+      ]
+    }
+  }
+}

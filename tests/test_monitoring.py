@@ -132,7 +132,7 @@ class MonitoringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "monitor.json"
             with patch("builtins.print"):
-                self.assertEqual(main(["monitor-demo", "--input", str(FIXTURE), "--output", str(output)]), 0)
+                self.assertEqual(main(["monitor-demo", "--prediction", "calendar", "--input", str(FIXTURE), "--output", str(output)]), 0)
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["summary"]["observations_processed"], 4)
         partial = run_monitor_demo(FIXTURE, lambda step: False)
         self.assertFalse(partial["summary"]["replay_complete"])

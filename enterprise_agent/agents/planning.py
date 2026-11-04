@@ -27,6 +27,21 @@ class DataCollect:
         return DecisionContext(baseline, snapshot, tuple(catalog), event)
 
 
+def expand_factory_scope(context, seeds):
+    """Close an order set over shared machines, then exclude frozen work."""
+    orders = {o.id: o for o in context.snapshot.orders}
+    scope = set(seeds)
+    if not scope <= set(orders):
+        raise ValueError("unknown order in factory scope")
+    while True:
+        machines = {m for oid in scope for op in orders[oid].operations for m in op.machines}
+        expanded = scope | {o.id for o in orders.values() if
+                            any(machines.intersection(op.machines) for op in o.operations)}
+        if expanded == scope:
+            return tuple(sorted(scope - context.frozen_ids))
+        scope = expanded
+
+
 class QuickRespond:
     """No network/LLM on the <5s gate path. SLA is measured, not assumed."""
 
@@ -59,16 +74,9 @@ class QuickRespond:
             scope = set(baseline.blocked)
             if reasons and not scope:
                 scope.update(orders)
-        while True:
-            machines = {m for oid in scope for op in orders[oid].operations for m in op.machines}
-            expanded = scope | {o.id for o in orders.values() if
-                                any(machines.intersection(op.machines) for op in o.operations)}
-            if expanded == scope:
-                break
-            scope = expanded
-        scope -= context.frozen_ids
+        scope = expand_factory_scope(context, scope)
         elapsed = monotonic() - started
-        return GateDecision(bool(reasons), tuple(sorted(scope)),
+        return GateDecision(bool(reasons), scope,
                             tuple(reasons or ["baseline feasible; no effective change"]), elapsed)
 
 

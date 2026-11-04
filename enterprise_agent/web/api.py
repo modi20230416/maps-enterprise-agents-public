@@ -140,9 +140,9 @@ def create_app(db_path="artifacts/platform.sqlite3", *, workers=2, allow_protoco
             raise HTTPException(422, "invalid factory input; nothing queued") from None
         if body.mode == "protocol_fixture":
             if not allow_protocol_fixture:
-                raise HTTPException(403, "protocol fixture is disabled")
+                raise HTTPException(403, "模拟演示未启用，请使用允许模拟演示的后端启动入口。")
             if digest(data) != digest(json.loads(SCENARIO.read_text(encoding="utf-8-sig"))):
-                raise HTTPException(422, "protocol fixture only supports the bundled synthetic scenario")
+                raise HTTPException(422, "模拟演示仅支持内置示例场景。")
         elif not llm_ready():
             raise HTTPException(503, "configure LLM in backend environment before submitting llm tasks")
         task, created = store.submit(data, kind=body.kind, mode=body.mode, request_key=idempotency_key,
@@ -166,7 +166,7 @@ def create_app(db_path="artifacts/platform.sqlite3", *, workers=2, allow_protoco
     def rerun(task_id: str):
         prior = store.get(task_id)
         if prior["mode"] == "protocol_fixture" and not allow_protocol_fixture:
-            raise HTTPException(403, "protocol fixture is disabled")
+            raise HTTPException(403, "模拟演示未启用，请使用允许模拟演示的后端启动入口。")
         if prior["mode"] == "llm" and not llm_ready():
             raise HTTPException(503, "LLM not configured")
         task, _ = store.submit(prior["input"], mode=prior["mode"], kind=prior["kind"], parent_id=task_id,

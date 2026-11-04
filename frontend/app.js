@@ -17,9 +17,9 @@ async function init() {
     const health = await api('/api/health');
     $('connection').textContent = `API 已连接 · ${health.worker_count} 个任务槽`;
     if(health.protocol_fixture_allowed && !$('mode').querySelector('[value="protocol_fixture"]')) {
-      const option=node('option','协议夹具 · 离线链路验证'); option.value='protocol_fixture'; $('mode').append(option);
+      const option=node('option','模拟演示（不调用大模型）'); option.value='protocol_fixture'; $('mode').append(option);
     }
-    $('mode-note').textContent = health.llm_configured ? '后端模型配置已齐；提交会调用服务，连通性仍需实际验证。' : '后端尚未配置密钥；真实 LLM 暂不可提交。可显式选协议夹具验证链路。';
+    $('mode-note').textContent = health.llm_configured ? '后端模型配置已齐；提交会调用服务，连通性仍需实际验证。' : '后端尚未配置密钥；真实 LLM 暂不可提交。可选择“模拟演示”查看完整流程。';
     await refresh();
   } catch(error) { $('connection').textContent = 'API 未连接'; message(`${error.message}。请先启动 API 与前端两个服务。`); }
 }
@@ -32,7 +32,7 @@ async function refresh() {
     $('tasks').replaceChildren();
     for(const task of tasks) {
       const button = node('button',undefined,`task${task.id === selected?' selected':''}`);
-      button.append(node('span',labels[task.status] || task.status,'task-state'),node('b',task.id.slice(0,8)),node('small',`${task.mode === 'llm'?'LLM':'协议夹具'} · ${stamp(task.created_at)}`));
+      button.append(node('span',labels[task.status] || task.status,'task-state'),node('b',task.id.slice(0,8)),node('small',`${task.mode === 'llm'?'真实大模型':'模拟演示'} · ${stamp(task.created_at)}`));
       button.onclick = () => select(task.id);
       $('tasks').append(button);
     }
@@ -61,7 +61,7 @@ function render(task, artifactsOverride=null, reviewsOverride=null) {
   $('status').textContent = labels[task.status] || task.status;
   const fixture = task.mode === 'protocol_fixture';
   $('source-note').className = `notice${fixture?' fixture':''}`;
-  $('source-note').textContent = fixture ? '协议夹具模式：验证协议解析、模块初始化、复核和持久化链路。没有调用真实 LLM，也不代表模型预测效果。' : '真实 LLM 模式：Prediction 根据当前状态和历史观测推断未来扰动。模型输出是风险假设，尚未构成经校准的预测概率。';
+  $('source-note').textContent = fixture ? '模拟演示（不调用大模型）：使用预先写好的风险回复，演示提前初始化、人工复核和记录回放。可验证流程能否运行，不能证明大模型预测效果。' : '真实 LLM 模式：Prediction 根据当前状态和历史观测推断未来扰动。模型输出是风险假设，尚未构成经校准的预测概率。';
   const artifacts = artifactsOverride || Object.fromEntries(task.artifacts.filter(a=>a.attempt===task.attempt).map(a=>[a.name,a.payload]));
   const prediction = artifacts.prediction || artifacts.report?.observation;
   const preparation = artifacts.preparation || artifacts.report?.observation?.preparation || {};
@@ -81,7 +81,7 @@ function render(task, artifactsOverride=null, reviewsOverride=null) {
   else if(!prediction.risks.length) $('risks').append(node('p',prediction.prediction_error || prediction.prediction_call?.abstention_reason || `当前结果：${prediction.status}，没有未来风险假设。`,'hint'));
   for(const risk of prediction?.risks || []) {
     const card = node('div',undefined,'risk');
-    card.append(node('h3',`${risk.kind} · ${risk.machine_id}`),node('p',risk.rationale),node('p',`预计影响窗口：${risk.earliest_impact_minute}–${risk.latest_impact_minute} min · 不确定性：${risk.uncertainty}`),node('p',`证据 ${risk.evidence_ids.join(' / ')} · 工单 ${risk.affected_order_ids.join(' / ')}`,'evidence'));
+    card.append(node('h3',`${risk.kind} · ${risk.machine_id}`),node('p',risk.rationale.replaceAll('协议夹具','预先写好的模拟回复')),node('p',`预计影响窗口：${risk.earliest_impact_minute}–${risk.latest_impact_minute} min · 不确定性：${risk.uncertainty}`),node('p',`证据 ${risk.evidence_ids.join(' / ')} · 工单 ${risk.affected_order_ids.join(' / ')}`,'evidence'));
     for(const request of risk.module_requests) card.append(node('p',`→ ${request.module}：${request.purpose}`));
     $('risks').append(card);
   }

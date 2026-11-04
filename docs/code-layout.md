@@ -38,7 +38,7 @@ enterprise_agent/
     operations_demo.py   前瞻预初始化与人机在环验证
     demo.py              主框架依赖组装与合成演示
     llm_monitor_demo.py  CLI/API共用的只读前瞻应用入口
-    protocol_fixture.py 显式离线协议夹具，不代表模型效果
+    protocol_fixture.py 显式离线预先编写的模拟回复，不代表模型效果
     task_runtime.py      有界并发进程、租约、超时与重试
   web/
     api.py               独立HTTP API与事件流

@@ -15,7 +15,7 @@ def fixture_prediction():
             "evidence_ids": ["OBS-02", "OBS-03"],
             "module_requests": [{"module": m, "purpose": "提前准备厂内作业调整上下文"}
                                 for m in ("planning", "scheduling", "warehouse")],
-            "rationale": "协议夹具：加工进度偏慢，可能影响后续工单。非真实模型推断。",
+            "rationale": "模拟回复（预先写好）：加工进度偏慢，可能影响后续工单。未调用大模型。",
             "uncertainty": "high"}], "abstention_reason": ""}
         return {"choices": [{"finish_reason": "tool_calls", "message": {"tool_calls": [{
             "id": "fixture", "function": {"name": "forecast_factory_risks", "arguments": json.dumps(result)}}]}}]}

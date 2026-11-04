@@ -11,7 +11,7 @@
     "version": "2.0.0",
     "tasks": [
       {
-        "label": "平台 01 后端API与任务运行时（允许协议夹具）",
+        "label": "平台 01 后端API与任务运行时（模拟演示，不调用大模型）",
         "type": "process",
         "command": "powershell.exe",
         "args": [

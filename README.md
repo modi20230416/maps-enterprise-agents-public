@@ -17,7 +17,7 @@ python -m venv .venv
 # http://127.0.0.1:5173
 ```
 
-夹具模式验证工程链路，不代表真实模型推断效果。真实 LLM 需要后端本机配置；当前并发单位是完整 Orchestrate 任务，下游初始化尚未拆成独立 Agent 服务。
+模拟演示模式验证工程链路，不代表真实模型推断效果。真实 LLM 需要后端本机配置；当前并发单位是完整 Orchestrate 任务，下游初始化尚未拆成独立 Agent 服务。
 
 ## 快速开始
 
@@ -73,7 +73,7 @@ python -m enterprise_agent llm-status
 python -m enterprise_agent framework-demo --agent llm --scenario high_order
 ```
 
-`llm.config.json` 和 `.env` 被 Git 忽略；`.env.example` 只作说明，程序不会自动加载。示例接口使用保留占位域名，须替换后才能联网。调用模型时，相关事件、工单标识和局部证据会发送到所配置服务。测试中的模型回复均为协议夹具，不能作为真实服务联调成功的证据。
+`llm.config.json` 和 `.env` 被 Git 忽略；`.env.example` 只作说明，程序不会自动加载。示例接口使用保留占位域名，须替换后才能联网。调用模型时，相关事件、工单标识和局部证据会发送到所配置服务。测试中的模型回复均为预先编写的模拟回复，不能作为真实服务联调成功的证据。
 
 ## 实验入口
 

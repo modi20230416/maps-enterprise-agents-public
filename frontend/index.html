@@ -5,7 +5,7 @@
 <header><a class="brand" href="/">M<span>APS</span></a><div class="title">Orchestrate 工作台<small>监控 → 前瞻推理 → 按需初始化 → 人工复核</small></div><span id="connection" class="chip">正在连接 API</span></header>
 <main>
 <aside><div class="section-title"><h2>任务空间</h2><span id="count">0</span></div>
-<form id="create"><label for="mode">推理来源</label><select id="mode"><option value="llm">真实 LLM · 后端环境配置</option></select>
+<form id="create"><label for="mode">推理来源</label><select id="mode"><option value="llm">真实大模型（需配置接口）</option></select>
 <p class="hint">场景：已就绪工单的加工进度偏慢。输入仅含当前状态与历史观测。</p><button id="submit" type="submit">＋ 新建监控任务</button><p id="mode-note" class="hint"></p></form>
 <div class="list-title">最近任务 <button id="refresh" class="text-button">刷新</button></div><nav id="tasks" aria-label="任务列表"></nav>
 <footer>前端 :5173 / API :8000<br>本机任务运行时 · SQLite 持久化</footer></aside>

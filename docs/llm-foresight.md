@@ -2,6 +2,8 @@
 
 当前Prediction的定位为：LLM根据当前运行状态与近期观测，推断可能发生的厂内扰动及需要提前准备的模块。旧版已知设备日历相交检查标记为`known_calendar_rules`，仅作为显式对照。
 
+Orchestrate默认持有LLMPrediction；仅在显式日历对照入口注入KnownCalendarLookahead。默认构造延迟读取模型配置，准备与监控均遵循模型选择。
+
 ## 技术路线
 
 运行状态与近期观测 → LLMPrediction调用已配置模型 → 结构化风险假设与模块请求 → 引用及范围校验 → Orchestrate按需初始化 → 记录准备结果与不确定性。

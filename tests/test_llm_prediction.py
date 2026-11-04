@@ -135,6 +135,8 @@ class LLMPredictionTests(unittest.TestCase):
         self.assertFalse(report["summary"]["live_call_verified"])
 
     def test_responses_protocol_and_default_cli_are_llm(self):
+        mes = InMemoryMES(self.baseline)
+        self.assertIsInstance(OrchestrateAgent(mes, mes).prediction, LLMPrediction)
         predictor, _ = self.predictor(api="responses")
         self.assertEqual(len(predictor.forecast(self.context)), 1)
         from enterprise_agent.cli import main

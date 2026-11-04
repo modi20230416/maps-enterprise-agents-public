@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.application.monitor_demo import run_monitor_demo
 from enterprise_agent.domain.contracts import MapsEvent
 from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
@@ -17,7 +18,7 @@ class MonitoringTests(unittest.TestCase):
     def setUp(self):
         self.data = json.loads(FIXTURE.read_text(encoding="utf-8"))
         self.mes = InMemoryMES(parse_baseline(self.data["mes"]))
-        self.engine = OrchestrateAgent(self.mes, self.mes)
+        self.engine = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead())
 
     def event(self, index=1):
         return MapsEvent.parse(self.data["observations"][index]["event"])
@@ -91,10 +92,10 @@ class MonitoringTests(unittest.TestCase):
         baseline = deepcopy(self.data["mes"])
         baseline["snapshot"]["lookahead_minutes"] = 29
         mes = InMemoryMES(parse_baseline(baseline))
-        self.assertEqual(OrchestrateAgent(mes, mes).monitor(self.event())["risks"], [])
+        self.assertEqual(OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead()).monitor(self.event())["risks"], [])
         baseline["snapshot"]["lookahead_minutes"] = 30
         mes = InMemoryMES(parse_baseline(baseline))
-        self.assertEqual(len(OrchestrateAgent(mes, mes).monitor(self.event())["risks"]), 1)
+        self.assertEqual(len(OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead()).monitor(self.event())["risks"]), 1)
         event = deepcopy(self.data["observations"][1]["event"])
         event["payload"].update(start=50, end=60)
         self.assertEqual(self.engine.monitor(MapsEvent.parse(event))["risks"], [])
@@ -103,7 +104,7 @@ class MonitoringTests(unittest.TestCase):
         baseline = deepcopy(self.data["mes"])
         baseline["work_orders"][1]["production_ready"] = False
         mes = InMemoryMES(parse_baseline(baseline))
-        self.assertEqual(OrchestrateAgent(mes, mes).monitor(self.event(), initialize=True)["status"], "NOT_ADMITTED")
+        self.assertEqual(OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead()).monitor(self.event(), initialize=True)["status"], "NOT_ADMITTED")
         event = MapsEvent.parse({"id": "excluded-inventory", "kind": "inventory.corrected",
                                  "at": 0, "priority": "high", "payload": {"material": "steel", "quantity": 0}})
         self.assertEqual(self.engine.monitor(event, initialize=True)["status"], "OUT_OF_SCOPE")

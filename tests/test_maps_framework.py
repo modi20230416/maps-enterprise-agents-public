@@ -15,6 +15,7 @@ from enterprise_agent.infrastructure.review import ReviewBoard, REVIEW_MODULES, 
 from enterprise_agent.domain.contracts import MapsEvent, MESPatch, Priority
 from enterprise_agent.application.demo import run_demo
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.agents.planning import DataCollect, PlanningAgent, QuickRespond
 from enterprise_agent.domain.ports import StaleMESVersion
 from enterprise_agent.agents.proposals import LLMProposals
@@ -49,7 +50,7 @@ class FrameworkTests(unittest.TestCase):
         return MESPatch("test-patch", 1, context, gate.scope, candidate.plan, ids)
 
     def test_high_priority_replans_without_interrupting_wip_or_unrelated_work(self):
-        result = OrchestrateAgent(self.mes, self.mes).process(self.event)
+        result = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead()).process(self.event)
         self.assertEqual((result.status, result.mes_version), ("APPLIED", 2))
         current = self.mes.read_baseline()
         by_id = {a.order_id: a for a in current.plan.assignments}
@@ -60,7 +61,7 @@ class FrameworkTests(unittest.TestCase):
         self.assertTrue(any(w.mo_id == "MO-300" and w.wo_id == "WO-HIGH" for w in current.work_orders))
 
     def test_warehouse_talks_directly_before_writeback_without_arbitration(self):
-        result = OrchestrateAgent(self.mes, self.mes).process(self.event)
+        result = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead()).process(self.event)
         kinds = [m["kind"] for m in result.trace]
         confirmation = next(m for m in result.trace if m["kind"] == "material.confirmed")
         self.assertEqual((confirmation["sender"], confirmation["receiver"]), ("warehouse", "scheduling"))
@@ -73,12 +74,12 @@ class FrameworkTests(unittest.TestCase):
             def propose(self, *args):
                 raise AssertionError("LLM must not run on no-change gate")
         tick = MapsEvent.parse({"id": "tick", "kind": "planning.tick", "at": 0, "priority": "low"})
-        result = OrchestrateAgent(self.mes, self.mes, proposer=Never()).process(tick)
+        result = OrchestrateAgent(self.mes, self.mes, proposer=Never(), prediction=KnownCalendarLookahead()).process(tick)
         self.assertEqual((result.status, result.mes_version), ("KEEP", 1))
 
     def test_nonemergency_preemption_rejected_at_every_priority(self):
         for priority in (Priority.HIGH, Priority.MEDIUM, Priority.LOW):
-            result = OrchestrateAgent(self.mes, self.mes).process(
+            result = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead()).process(
                 replace(self.event, priority=priority, safety_actions=("preempt",)))
             self.assertEqual(result.status, "REJECTED")
             self.assertEqual(self.mes.read_baseline().version, 1)
@@ -86,7 +87,7 @@ class FrameworkTests(unittest.TestCase):
     def test_emergency_and_changeover_wait_for_hitl_not_auto_execute(self):
         for priority, action in ((Priority.EMERGENCY, "preempt"), (Priority.HIGH, "changeover"),
                                  (Priority.MEDIUM, "process_parameter_change")):
-            result = OrchestrateAgent(self.mes, self.mes).process(
+            result = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead()).process(
                 replace(self.event, priority=priority, safety_actions=(action,)))
             self.assertEqual((result.status, result.mes_version), ("PENDING_HITL", 1))
 
@@ -98,7 +99,7 @@ class FrameworkTests(unittest.TestCase):
     def test_unachievable_hard_due_date_does_not_silently_relax(self):
         event = deepcopy(self.data["event"])
         event["payload"]["order"]["due"] = 10
-        result = OrchestrateAgent(self.mes, self.mes).process(MapsEvent.parse(event))
+        result = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead()).process(MapsEvent.parse(event))
         self.assertEqual(result.status, "ESCALATED")
         self.assertTrue(any("hard delivery deadline" in error for error in result.errors))
         self.assertEqual(self.mes.read_baseline().version, 1)
@@ -134,7 +135,7 @@ class FrameworkTests(unittest.TestCase):
         self.assertEqual(self.mes.read_baseline().version, 1)
 
     def test_event_retry_does_not_write_twice_and_changed_payload_is_rejected(self):
-        engine = OrchestrateAgent(self.mes, self.mes)
+        engine = OrchestrateAgent(self.mes, self.mes, prediction=KnownCalendarLookahead())
         first = engine.process(self.event)
         first.trace.clear()  # caller mutation must not corrupt cached audit
         again = engine.process(self.event)
@@ -154,7 +155,7 @@ class FrameworkTests(unittest.TestCase):
         class StaleWriter:
             def submit_patch(self, patch):
                 raise StaleMESVersion("changed")
-        engine = OrchestrateAgent(self.mes, StaleWriter())
+        engine = OrchestrateAgent(self.mes, StaleWriter(), prediction=KnownCalendarLookahead())
         self.assertEqual(engine.process(self.event).status, "STALE")
         engine.writer = self.mes
         self.assertEqual(engine.process(self.event).status, "APPLIED")
@@ -194,7 +195,7 @@ class FrameworkTests(unittest.TestCase):
     def test_llm_proposal_runs_deterministic_pipeline(self):
         args = json.dumps({"action": "REPLAN", "scope": ["WO-HIGH", "WO-NORMAL"],
                            "rationale": "保护在制品，局部插单"})
-        result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(args)).process(self.event)
+        result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(args), prediction=KnownCalendarLookahead()).process(self.event)
         self.assertEqual(result.status, "APPLIED")
         proposal = next(m["payload"] for m in result.trace if m["kind"] == "coordination.proposed")
         self.assertEqual(proposal["source"], "llm")
@@ -203,14 +204,14 @@ class FrameworkTests(unittest.TestCase):
         valid = {"action": "REPLAN", "scope": ["WO-HIGH", "WO-NORMAL"], "rationale": "test"}
         for bad in ({**valid, "scope": ["WO-RUN", "WO-HIGH", "WO-NORMAL"]},
                     {**valid, "action": "KEEP"}, {**valid, "approved": True}):
-            result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(json.dumps(bad))).process(self.event)
+            result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(json.dumps(bad)), prediction=KnownCalendarLookahead()).process(self.event)
             self.assertEqual(result.status, "APPLIED")
             self.assertIn("llm.fallback", [m["kind"] for m in result.trace])
             self.reviews = ReviewBoard(lambda req: {"approved": True, "reviewer": "test-fixture"}, simulated=True)
             self.mes = InMemoryMES(self.baseline, reviews=self.reviews, allow_simulated_reviews=True)
 
     def test_llm_failure_records_rules_fallback(self):
-        result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(failure=True)).process(self.event)
+        result = OrchestrateAgent(self.mes, self.mes, proposer=self.llm_proposer(failure=True), prediction=KnownCalendarLookahead()).process(self.event)
         self.assertEqual(result.status, "APPLIED")
         self.assertIn("llm.fallback", [m["kind"] for m in result.trace])
 

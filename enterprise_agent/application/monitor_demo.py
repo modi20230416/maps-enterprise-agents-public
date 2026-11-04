@@ -4,6 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.domain.contracts import MapsEvent
 from enterprise_agent.infrastructure.mes import InMemoryMES, fingerprint, parse_baseline
 
@@ -12,7 +13,7 @@ def run_monitor_demo(path, on_step=None):
     data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     mes = InMemoryMES(parse_baseline(data["mes"]))
     before = mes.read_baseline()
-    engine = OrchestrateAgent(mes, mes)
+    engine = OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead())
     results = []
     for index, item in enumerate(data["observations"], 1):
         observation = engine.monitor(MapsEvent.parse(item["event"]), initialize=True)

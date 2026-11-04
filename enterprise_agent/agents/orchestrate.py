@@ -18,7 +18,7 @@ from enterprise_agent.agents.proposals import RuleProposals
 from enterprise_agent.agents.scheduling import SchedulingAgent
 from enterprise_agent.capabilities.validation import safety_status, validate_candidate, validate_proposal
 from enterprise_agent.capabilities.admission import admission_errors
-from enterprise_agent.agents.prediction import KnownCalendarLookahead
+from enterprise_agent.agents.prediction import LLMPrediction
 from enterprise_agent.infrastructure.review import ReviewBoard, REVIEW_MODULES, decision_binding
 
 
@@ -33,9 +33,7 @@ class OrchestrateAgent:
         self.planning = planning or PlanningAgent()
         self.scheduling = scheduling or SchedulingAgent()
         self.diagnosis = diagnosis
-        # Legacy calendar scenarios use an explicitly labelled rules baseline.
-        # The monitor-demo LLM entry injects LLMPrediction here.
-        self.prediction = prediction or KnownCalendarLookahead()
+        self.prediction = prediction or LLMPrediction()
         self.reviews = reviews or getattr(reader, "reviews", None) or ReviewBoard()
         self._results: dict[str, tuple[str, DecisionResult]] = {}
         self._lock = Lock()
@@ -144,17 +142,15 @@ class OrchestrateAgent:
         return context, gate, observation
 
     def _prepare(self, notice):
-        if notice.event.kind in {"receipt.delayed", "inventory.corrected"}:
-            return {"status": "OUT_OF_SCOPE", "risks": []}
-        context = DataCollect().collect(self.reader.read_baseline(), notice)
-        errors = admission_errors(context)
-        if errors:
-            return {"status": "NOT_ADMITTED", "errors": errors}
-        risks = self.prediction.forecast(context)
-        if not risks:
+        context, gate, observed = self._observe(notice)
+        if observed["status"] in {"OUT_OF_SCOPE", "NOT_ADMITTED", "PREDICTION_UNAVAILABLE"}:
+            return {"status": observed["status"], "errors": observed.get("errors", []),
+                    "execution_authorized": False}
+        if not observed["risks"]:
             return {"status": "NO_PREDICTED_CONFLICT", "risks": []}
-        gate = QuickRespond().assess(context)
-        return self._initialize(context, gate, risks)
+        if not observed["should_prepare"]:
+            return {"status": "PREPARATION_BLOCKED", "execution_authorized": False}
+        return self._initialize(context, gate, observed["risks"], observed["requested_modules"])
 
     def _initialize(self, context, gate, risks, requested_modules=None):
         requested = set(["planning", "scheduling", "warehouse"] if requested_modules is None else requested_modules)
@@ -230,7 +226,10 @@ class OrchestrateAgent:
         if not gate.need_replan:
             return finish("KEEP", gate.reasons[0], plan=baseline.plan)
         package = self.planning.prepare(context, gate.scope)
-        evidence = self.prediction.forecast(context)
+        try:
+            evidence = self.prediction.forecast(context)
+        except (LLMError, ValueError, TypeError, KeyError, OSError):
+            return finish("PREDICTION_UNAVAILABLE", "model call or forecast validation failed; no rules substitution")
         bus.send("prediction", "orchestrate", "operations.forecast", {"risks": evidence})
         if self.diagnosis:
             try:

@@ -4,6 +4,7 @@ from pathlib import Path
 from time import perf_counter
 
 from enterprise_agent.agents.orchestrate import OrchestrateAgent
+from enterprise_agent.agents.prediction import KnownCalendarLookahead
 from enterprise_agent.agents.planning import DataCollect, QuickRespond, PlanningAgent
 from enterprise_agent.capabilities.local_search import LocalSearchSolver
 from enterprise_agent.capabilities.validation import validate_candidate
@@ -36,7 +37,7 @@ def run_operations_demo(path, review_mode="manual", proposer=None):
     board = ReviewBoard(manual if review_mode == "manual" else scripted if review_mode == "scripted" else None,
                         simulated=review_mode == "scripted")
     mes = InMemoryMES(baseline, reviews=board, allow_simulated_reviews=review_mode == "scripted")
-    engine = OrchestrateAgent(mes, mes, reviews=board, proposer=proposer)
+    engine = OrchestrateAgent(mes, mes, reviews=board, proposer=proposer, prediction=KnownCalendarLookahead())
 
     context = DataCollect().collect(baseline, event)
     gate = QuickRespond().assess(context)
@@ -56,6 +57,7 @@ def run_operations_demo(path, review_mode="manual", proposer=None):
     same = warm_assignments == cold_candidate.plan.to_dict()["assignments"]
     return {"summary": {
                 "status": result.status, "review_mode": review_mode,
+                "prediction_source": "known_calendar_rules",
                 "simulated_approvals": board.simulated,
                 "preparation_status": preparation["status"],
                 "lead_minutes": max((r["lead_minutes"] for r in preparation.get("risks", [])), default=0),

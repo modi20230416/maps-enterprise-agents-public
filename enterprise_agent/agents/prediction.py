@@ -4,7 +4,7 @@ from dataclasses import asdict
 import json
 import math
 
-from enterprise_agent.infrastructure.llm import LLMError, tool, http_json
+from enterprise_agent.infrastructure.llm import LLMClient, LLMConfig, LLMError, tool, http_json
 
 
 class LLMPrediction:
@@ -15,13 +15,15 @@ class LLMPrediction:
     """
     source = "llm"
 
-    def __init__(self, client):
+    def __init__(self, client=None):
         self.client = client
         self.last_call = None
-        self.response_origin = "provider_api" if client.transport is http_json else "protocol_fixture"
+        self.response_origin = "provider_api" if client is None or client.transport is http_json else "protocol_fixture"
 
     def forecast(self, context):
         self.last_call = None
+        if self.client is None:
+            self.client = LLMClient(LLMConfig.from_env())
         orders = {o.id: o for o in context.snapshot.orders}
         machines = {m.id for m in context.snapshot.machines}
         observations = context.event.event.payload.get("runtime_observations", [])

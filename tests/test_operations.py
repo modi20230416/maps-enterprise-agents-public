@@ -68,14 +68,14 @@ class OperationsTests(unittest.TestCase):
             board = ReviewBoard(lambda req: {"approved": req["module"] != denied,
                                              "reviewer": "SIMULATED_TEST"}, simulated=True)
             mes = InMemoryMES(self.baseline, reviews=board, allow_simulated_reviews=True)
-            result = OrchestrateAgent(mes, mes).process(self.event)
+            result = OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead()).process(self.event)
             self.assertEqual(result.status, "REJECTED")
             self.assertEqual(mes.read_baseline().version, 1)
 
     def test_pending_can_be_reviewed_then_retried(self):
         board = ReviewBoard()
         mes = InMemoryMES(self.baseline, reviews=board)
-        engine = OrchestrateAgent(mes, mes)
+        engine = OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead())
         self.assertEqual(engine.process(self.event).status, "PENDING_HITL")
         for key in list(board.requests):
             board.decide(key, approved=True, reviewer="local-test-reviewer")
@@ -101,7 +101,7 @@ class OperationsTests(unittest.TestCase):
         bad = deepcopy(self.data["mes"])
         bad["work_orders"][1]["production_ready"] = False
         mes = InMemoryMES(parse_baseline(bad))
-        engine = OrchestrateAgent(mes, mes)
+        engine = OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead())
         self.assertEqual(engine.process(self.event).status, "NOT_ADMITTED")
         self.assertEqual(engine.prepare(self.notice)["status"], "NOT_ADMITTED")
         self.assertEqual(mes.read_baseline().version, 1)
@@ -132,7 +132,7 @@ class OperationsTests(unittest.TestCase):
     def test_simulated_approvals_need_explicit_simulation_gateway(self):
         board = ReviewBoard(lambda req: {"approved": True, "reviewer": "SIMULATED_TEST"}, simulated=True)
         mes = InMemoryMES(self.baseline, reviews=board)
-        self.assertEqual(OrchestrateAgent(mes, mes).process(self.event).status, "WRITE_REJECTED")
+        self.assertEqual(OrchestrateAgent(mes, mes, prediction=KnownCalendarLookahead()).process(self.event).status, "WRITE_REJECTED")
 
 
 if __name__ == "__main__":

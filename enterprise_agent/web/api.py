@@ -92,7 +92,8 @@ def create_app(db_path="artifacts/platform.sqlite3", *, workers=2, allow_protoco
     async def request_boundary(request, call_next):
         if request.method == "POST":
             origin = request.headers.get("origin")
-            if origin and origin not in allowed_origins:
+            same_origin = str(request.base_url).rstrip("/")
+            if origin and origin not in allowed_origins and origin != same_origin:
                 return JSONResponse({"detail": "origin not allowed"}, status_code=403)
             if request.url.path.endswith(("/tasks", "/reviews/orchestrate", "/reviews/planning", "/reviews/scheduling", "/reviews/warehouse")):
                 if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":

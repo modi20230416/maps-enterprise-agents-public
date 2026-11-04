@@ -66,6 +66,9 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/tasks/missing").status_code,404)
         cors=self.client.options("/api/tasks",headers={"Origin":"http://127.0.0.1:5173","Access-Control-Request-Method":"POST"})
         self.assertEqual(cors.headers["access-control-allow-origin"],"http://127.0.0.1:5173")
+        # Same-origin Swagger/API clients must also be allowed to submit.
+        same_origin=self.client.post("/api/tasks",json={"mode":"protocol_fixture"},headers={"Origin":"http://testserver"})
+        self.assertEqual(same_origin.status_code,202,same_origin.text)
 
     def test_http_execution_review_restart_replay_and_rerun(self):
         app=create_app(self.path,allow_protocol_fixture=True)

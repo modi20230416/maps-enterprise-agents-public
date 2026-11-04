@@ -12,7 +12,7 @@ enterprise_agent/
     planning.py          计划：采集、门卫、工单优化
     scheduling.py        排单：候选策略、工序安排、直接协商
     warehouse.py         就绪复核：当前分配一致性与人工审核
-    prediction.py        编排层已知设备窗口前瞻
+    prediction.py        LLM前瞻推理；已知日历规则仅作显式对照
     proposals.py         LLM / 规则协调提案
   capabilities/
     admission.py         已就绪任务准入
@@ -27,14 +27,22 @@ enterprise_agent/
     contracts.py         事件、优先级、上下文、补丁
     ports.py             企业系统、预测、策略协议
     policy.py            学习策略回放资格
+    runtime.py           任务租约、事件版本与处理器协议
   infrastructure/
     llm.py               HTTP 模型适配与工具 schema
     mes.py               内存 MES、版本校验
     review.py            四模块审核与方案绑定
     trace.py             同步调用审计记录
+    task_store.py        SQLite任务队列、事件、产物、复核与回放
   application/
     operations_demo.py   前瞻预初始化与人机在环验证
     demo.py              主框架依赖组装与合成演示
+    llm_monitor_demo.py  CLI/API共用的只读前瞻应用入口
+    protocol_fixture.py 显式离线协议夹具，不代表模型效果
+    task_runtime.py      有界并发进程、租约、超时与重试
+  web/
+    api.py               独立HTTP API与事件流
+    serve.py             API/静态前端独立启动入口
   experiments/
     rule_orchestrator.py 早期规则编排实验
     llm_orchestrator.py  早期模型编排实验
@@ -47,6 +55,7 @@ enterprise_agent/
     scenarios.py         合成实验数据
     reporting.py         实验报告
   cli.py                 命令行入口
+frontend/                HTML/CSS/JS独立Web客户端
 ```
 
 Agent 使用共享能力完成计算。底层的 `EventCollector`、`KnownRiskPredictor`、
@@ -58,5 +67,6 @@ Agent 使用共享能力完成计算。底层的 `EventCollector`、`KnownRiskPr
 
 ## 运行入口
 
-本阶段验证使用 `python -m enterprise_agent operations-demo`；通用场景使用 `python -m enterprise_agent framework-demo`。
+当前Web工作台分别使用 `platform-api` 和 `platform-ui`；参见 [平台运行说明](platform-runtime.md)。当前并发隔离单位是完整监控任务，初始化模块仍在该任务内调用，独立Agent任务调度待后续扩展。
+命令行前瞻使用 `monitor-demo`，其他链路使用 `operations-demo` 或 `framework-demo`。
 `demo`、`run`、`benchmark`、`rl-demo`、`train-drl` 用于独立实验。

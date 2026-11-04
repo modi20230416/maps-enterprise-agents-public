@@ -58,11 +58,13 @@ class OrchestrateAgent:
         with self._lock:
             return self._prepare(notice)
 
-    def monitor(self, event: MapsEvent, *, initialize=False):
+    def monitor(self, event: MapsEvent, *, initialize=False, on_stage=None):
         """Inspect an observation and optionally prepare context; never solve/write."""
         with self._lock:
             context, gate, observation = self._observe(event)
             observation["preparation"] = {"status": "SKIPPED"}
+            if on_stage:
+                on_stage("prediction", deepcopy(observation))
             if initialize and observation["should_prepare"]:
                 observation["preparation"] = self._initialize(
                     context, gate, observation["risks"], observation["requested_modules"])
@@ -70,6 +72,8 @@ class OrchestrateAgent:
                 bus.messages = observation["trace"]
                 bus.send("orchestrate", "audit", "monitor.preparation_completed",
                          observation["preparation"])
+            if on_stage:
+                on_stage("preparation", deepcopy(observation["preparation"]))
             return observation
 
     def _observe(self, event):

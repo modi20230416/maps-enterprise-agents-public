@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MAPS · Orchestrate 工作台</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<header><a class="brand" href="/">M<span>APS</span></a><div class="title">Orchestrate 工作台<small>监控 → 前瞻推理 → 按需初始化 → 人工复核</small></div><span id="connection" class="chip">正在连接 API</span></header>
+<main>
+<aside><div class="section-title"><h2>任务空间</h2><span id="count">0</span></div>
+<form id="create"><label for="mode">推理来源</label><select id="mode"><option value="llm">真实 LLM · 后端环境配置</option></select>
+<p class="hint">场景：已就绪工单的加工进度偏慢。输入仅含当前状态与历史观测。</p><button id="submit" type="submit">＋ 新建监控任务</button><p id="mode-note" class="hint"></p></form>
+<div class="list-title">最近任务 <button id="refresh" class="text-button">刷新</button></div><nav id="tasks" aria-label="任务列表"></nav>
+<footer>前端 :5173 / API :8000<br>本机任务运行时 · SQLite 持久化</footer></aside>
+<article>
+<div id="message" role="status" hidden></div>
+<section id="empty" class="empty"><span class="eyebrow">MAPS / FACTORY OPERATIONS</span><h1>把未来扰动，提前变成准备动作。</h1><p>创建一个任务，查看 Orchestrate 如何结合运行观测，向 Prediction 请求风险假设，并按需准备下游模块。</p><div class="empty-grid"><div><b>01 · 监控</b><p>读取当前车间状态与历史进度。</p></div><div><b>02 · 前瞻</b><p>结构化风险、证据与模块请求。</p></div><div><b>03 · 准备</b><p>预建上下文，逐模块人工复核。</p></div></div></section>
+<div id="detail" hidden>
+<div class="task-heading"><div><span class="eyebrow">ORCHESTRATE / MONITOR</span><h1 id="task-title"></h1><p id="task-meta" class="hint"></p></div><div class="actions"><button id="cancel" class="secondary">取消任务</button><button id="rerun" class="secondary">新建重跑任务</button></div></div>
+<div id="source-note" class="notice"></div>
+<div class="metrics"><div><span>任务状态</span><strong id="status"></strong></div><div><span>未来风险假设</span><strong id="risk-count">—</strong></div><div><span>已初始化模块</span><strong id="module-count">—</strong></div><div><span>MES 状态</span><strong id="mes-state">未写回</strong></div></div>
+<section class="panel"><div class="section-title"><h2>运行观测</h2><span class="chip">已就绪工单 · 厂内作业</span></div><div id="observations" class="observations"></div></section>
+<section class="panel"><div class="section-title"><h2>Prediction · 未来扰动与证据</h2><span class="subtle">假设，待业务验证</span></div><div id="risks"></div></section>
+<section class="panel"><div class="section-title"><h2>按需初始化与人工复核</h2><span class="subtle">准备计算上下文，不下发生产指令</span></div>
+<div class="reviewer"><label for="reviewer">本地复核人</label><input id="reviewer" maxlength="80" placeholder="填写姓名"><label for="comment">复核意见</label><input id="comment" maxlength="1000" placeholder="选填"><span class="hint">演示签名，不代表企业身份认证</span></div><div id="modules" class="module-grid"></div></section>
+<section class="panel"><div class="section-title"><h2>持久化事件与历史回放</h2><span id="event-count" class="subtle"></span></div>
+<div class="replay-bar"><label for="replay-cursor">回放到事件</label><select id="replay-cursor"><option value="">最新状态</option></select><button id="replay" class="secondary">读取历史状态</button><button id="live" class="text-button">返回实时</button></div><p class="hint">历史回放只读取已存记录，不调用模型。新建重跑会执行一个新任务。</p><pre id="projection" hidden></pre><ol id="timeline"></ol></section>
+</div></article></main><script type="module" src="/app.js"></script></body></html>

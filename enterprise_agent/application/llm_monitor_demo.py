@@ -10,10 +10,15 @@ from enterprise_agent.infrastructure.mes import InMemoryMES, parse_baseline
 
 def run_llm_monitor_demo(path, prediction):
     data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    return run_llm_monitor_data(data, prediction)
+
+
+def run_llm_monitor_data(data, prediction, on_stage=None):
+    """Application entry shared by CLI and API workers; no file round trip."""
     mes = InMemoryMES(parse_baseline(data["mes"]))
     before = mes.read_baseline()
     result = OrchestrateAgent(mes, mes, prediction=prediction).monitor(
-        MapsEvent.parse(data["event"]), initialize=True)
+        MapsEvent.parse(data["event"]), initialize=True, on_stage=on_stage)
     after = mes.read_baseline()
     preparation = result["preparation"]
     call = result.get("prediction_call") or {}

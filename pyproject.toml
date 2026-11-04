@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+web-test = ["httpx>=0.27,<1"]
 drl = ["numpy>=1.24"]
 gym = ["numpy>=1.24", "gymnasium>=1.0"]
 

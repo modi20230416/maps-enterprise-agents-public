@@ -1,0 +1,79 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "平台 01 后端API与任务运行时（允许协议夹具）",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-File",
+          "${workspaceFolder}/run_platform.ps1",
+          "-Role",
+          "api",
+          "-WithFixtures"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "clear": true
+        }
+      },
+      {
+        "label": "平台 02 独立前端",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-File",
+          "${workspaceFolder}/run_platform.ps1",
+          "-Role",
+          "ui"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "clear": true
+        }
+      },
+      {
+        "label": "平台 03 运行时与API测试",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-File",
+          "${workspaceFolder}/run_platform.ps1",
+          "-Role",
+          "test"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "clear": true
+        }
+      }
+    ]
+  }
+}

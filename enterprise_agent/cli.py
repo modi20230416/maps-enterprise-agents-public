@@ -20,6 +20,13 @@ def write_json(path: str | Path, value: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="企业多 Agent 计划与排程原型（离线仿真）")
     commands = parser.add_subparsers(dest="command", required=True)
+    api = commands.add_parser("platform-api", help="启动独立API与持久化异步任务运行时（本机）")
+    api.add_argument("--db", default="artifacts/platform.sqlite3")
+    api.add_argument("--port", type=int, default=8000)
+    api.add_argument("--workers", type=int, default=2)
+    api.add_argument("--allow-protocol-fixture", action="store_true")
+    ui = commands.add_parser("platform-ui", help="启动独立Web前端（本机）")
+    ui.add_argument("--port", type=int, default=5173)
     monitor = commands.add_parser("monitor-demo", help="LLM前瞻推理与按需模块准备；日历规则仅作显式对照")
     monitor.add_argument("--prediction", choices=["llm", "calendar"], default="llm")
     monitor.add_argument("--input", default=None)
@@ -67,6 +74,14 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--directory", default="examples")
     args = parser.parse_args(argv)
     try:
+        if args.command == "platform-api":
+            from enterprise_agent.web.serve import serve_api
+            serve_api(args.db, args.port, args.workers, args.allow_protocol_fixture)
+            return 0
+        if args.command == "platform-ui":
+            from enterprise_agent.web.serve import serve_ui
+            serve_ui(args.port)
+            return 0
         if args.command == "monitor-demo":
             if args.prediction == "llm":
                 from enterprise_agent.agents.prediction import LLMPrediction
